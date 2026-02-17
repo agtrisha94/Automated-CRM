@@ -12,3 +12,179 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////
+
+enum LeadStatus {
+  COLD
+  WARM
+  HOT
+  QUALIFIED
+  LOST
+}
+
+enum InteractionType {
+  CALL
+  EMAIL
+  MEETING
+  DEMO
+  NOTE
+  TASK
+}
+
+enum UserRole {
+  ADMIN
+  SALES
+}
+
+enum ScoreChangeType {
+  AUTOMATED
+  MANUAL
+}
+
+//////////////////////////////////////////////////////
+// USER
+//////////////////////////////////////////////////////
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  role      UserRole @default(SALES)
+
+  leads     Lead[]
+  createdAt DateTime @default(now())
+
+  @@index([role])
+}
+
+//////////////////////////////////////////////////////
+// CAMPAIGN
+//////////////////////////////////////////////////////
+
+model Campaign {
+  id        String   @id @default(uuid())
+  name      String
+  channel   String
+  budget    Float?
+  createdAt DateTime @default(now())
+
+  leads     Lead[]
+}
+
+//////////////////////////////////////////////////////
+// LEAD
+//////////////////////////////////////////////////////
+
+model Lead {
+  id            String      @id @default(uuid())
+  firstName     String
+  lastName      String?
+  email         String      @unique
+  phone         String?
+
+  company       String?
+  industry      String?
+  companySize   String?
+  source        String?
+
+  status        LeadStatus  @default(COLD)
+  score         Int         @default(0)
+
+  assignedToId  String?
+  assignedTo    User?       @relation(fields: [assignedToId], references: [id])
+
+  campaignId    String?
+  campaign      Campaign?   @relation(fields: [campaignId], references: [id])
+
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  interactions     Interaction[]
+  scoringHistory   ScoringHistory[]
+  stageHistory     LeadStageHistory[]
+
+  @@index([status])
+  @@index([score])
+  @@index([createdAt])
+  @@index([assignedToId])
+}
+
+//////////////////////////////////////////////////////
+// INTERACTION
+//////////////////////////////////////////////////////
+
+model Interaction {
+  id        String          @id @default(uuid())
+  leadId    String
+  type      InteractionType
+  notes     String?
+  createdAt DateTime        @default(now())
+
+  lead      Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([type])
+}
+
+//////////////////////////////////////////////////////
+// SCORING HISTORY
+//////////////////////////////////////////////////////
+
+model ScoringHistory {
+  id            String          @id @default(uuid())
+  leadId        String
+  previousScore Int
+  newScore      Int
+  reason        String?
+  changeType    ScoreChangeType @default(AUTOMATED)
+  createdAt     DateTime        @default(now())
+
+  lead          Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+//////////////////////////////////////////////////////
+// SCORING RULES (AUTOMATION ENGINE)
+//////////////////////////////////////////////////////
+
+model ScoringRule {
+  id        String   @id @default(uuid())
+  event     InteractionType
+  points    Int
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([event])
+}
+
+//////////////////////////////////////////////////////
+// LEAD STAGE HISTORY (ANALYTICS)
+//////////////////////////////////////////////////////
+
+model LeadStageHistory {
+  id        String      @id @default(uuid())
+  leadId    String
+  from      LeadStatus
+  to        LeadStatus
+  changedAt DateTime    @default(now())
+
+  lead      Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
