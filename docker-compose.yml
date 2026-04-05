@@ -24,6 +24,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
     volumes:
       - ./scoring-service:/app
+      - ./scripts:/scripts:ro  # Mount scripts folder as read-only for research metrics
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

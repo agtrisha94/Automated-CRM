@@ -769,11 +769,218 @@ def score_compare(lead: LeadFeatures):
 
 @app.get(
     "/research/metrics",
-    response_model=list[MetricsResult],
     tags=["Research"],
-    summary="Aggregated metrics for research paper (Week 5)",
+    summary="Comprehensive research metrics for all scoring methods (Week 5)",
 )
 def research_metrics():
+    """
+    ============================================================================
+    WEEK 5: RESEARCH METRICS ENDPOINT
+    ============================================================================
+    
+    Calculate comprehensive performance metrics for all three scoring methods
+    using the test dataset. This endpoint is used for the research paper's
+    comparative analysis.
+    
+    METHODOLOGY:
+    1. Load test dataset from synthetic leads
+    2. Score each lead with all three methods
+    3. Calculate classification metrics (F1, AUC-ROC, Precision, Recall)
+    4. Measure average latency for each method
+    5. Calculate agreement rate and delta between methods
+    
+    METRICS RETURNED:
+    - F1 Score: Harmonic mean of precision and recall
+    - AUC-ROC: Area under ROC curve (discrimination ability)
+    - Precision: True positives / (True positives + False positives)
+    - Recall: True positives / (True positives + False negatives)
+    - Avg Latency: Mean scoring time in milliseconds
+    - Agreement Rate: % of leads where all methods agree on category
+    
+    Returns:
+        Comprehensive metrics for all three scoring methods
+    """
+    import json
+    from pathlib import Path
+    import pandas as pd
+    import numpy as np
+    from sklearn.metrics import (
+        f1_score, roc_auc_score, precision_score, recall_score
+    )
+    
+    # Load test dataset
+    # Try multiple possible paths (local dev vs Docker)
+    possible_paths = [
+        Path("/scripts/synthetic_leads_sigma10.json"),  # Docker mount
+        Path(__file__).parent.parent / "scripts" / "synthetic_leads_sigma10.json",  # Local dev
+    ]
+    
+    data_path = None
+    for path in possible_paths:
+        if path.exists():
+            data_path = path
+            break
+    
+    if data_path is None:
+        return {
+            "error": "Test dataset not found",
+            "message": "Please ensure synthetic_leads_sigma10.json exists",
+            "searched_paths": [str(p) for p in possible_paths]
+        }
+    
+    with open(data_path, 'r') as f:
+        data = json.load(f)
+    
+    # Extract leads
+    leads_data = data['leads'] if isinstance(data, dict) and 'leads' in data else data
+    df = pd.DataFrame(leads_data)
+    
+    # Use a subset for faster evaluation (500 leads is sufficient for research)
+    test_df = df.sample(n=min(500, len(df)), random_state=42)
+    
+    # Storage for predictions
+    rule_predictions = []
+    ml_predictions = []
+    rf_predictions = []
+    
+    rule_latencies = []
+    ml_latencies = []
+    rf_latencies = []
+    
+    rule_categories = []
+    ml_categories = []
+    rf_categories = []
+    
+    actual_labels = test_df['actuallyConverted'].values
+    
+    # Score each lead with all three methods
+    print(f"🔬 Evaluating {len(test_df)} leads for research metrics...")
+    
+    for idx, row in test_df.iterrows():
+        lead = LeadFeatures(
+            leadId=row['id'],
+            emailOpens=row['emailOpens'],
+            websiteVisits=row['websiteVisits'],
+            formFills=row['formFills'],
+            companySize=row.get('companySize'),
+            industry=row.get('industry'),
+        )
+        
+        # Rule-based scoring
+        start = time.perf_counter()
+        rule_score, rule_cat, _ = rule_scorer.calculate_score(lead)
+        rule_latencies.append((time.perf_counter() - start) * 1000)
+        rule_predictions.append(rule_score)
+        rule_categories.append(rule_cat)
+        
+        # ML scoring (Logistic Regression)
+        start = time.perf_counter()
+        ml_score, ml_cat = ml_scorer.predict(lead)
+        ml_latencies.append((time.perf_counter() - start) * 1000)
+        ml_predictions.append(ml_score)
+        ml_categories.append(ml_cat)
+        
+        # Random Forest scoring
+        start = time.perf_counter()
+        rf_score, rf_cat = rf_scorer.predict(lead)
+        rf_latencies.append((time.perf_counter() - start) * 1000)
+        rf_predictions.append(rf_score)
+        rf_categories.append(rf_cat)
+    
+    # Convert scores to binary predictions (using 50 as threshold for conversion)
+    rule_binary = [1 if s >= 50 else 0 for s in rule_predictions]
+    ml_binary = [1 if s >= 50 else 0 for s in ml_predictions]
+    rf_binary = [1 if s >= 50 else 0 for s in rf_predictions]
+    
+    # Normalize scores to 0-1 range for AUC-ROC calculation
+    rule_proba = [min(s / 150.0, 1.0) for s in rule_predictions]  # Rule scores can exceed 100
+    ml_proba = [s / 100.0 for s in ml_predictions]
+    rf_proba = [s / 100.0 for s in rf_predictions]
+    
+    # Calculate metrics for each model
+    def safe_metric(metric_fn, *args, **kwargs):
+        """Safely calculate metric, return 0 if error."""
+        try:
+            return float(metric_fn(*args, **kwargs))
+        except Exception as e:
+            print(f"⚠️  Metric calculation error: {e}")
+            return 0.0
+    
+    # Rule-based metrics
+    rule_metrics = {
+        "model": "rules",
+        "f1": safe_metric(f1_score, actual_labels, rule_binary),
+        "aucRoc": safe_metric(roc_auc_score, actual_labels, rule_proba),
+        "precision": safe_metric(precision_score, actual_labels, rule_binary),
+        "recall": safe_metric(recall_score, actual_labels, rule_binary),
+        "avgLatencyMs": float(np.mean(rule_latencies)),
+        "nSamples": len(test_df),
+    }
+    
+    # Logistic Regression metrics
+    ml_metrics = {
+        "model": "logistic_regression",
+        "f1": safe_metric(f1_score, actual_labels, ml_binary),
+        "aucRoc": safe_metric(roc_auc_score, actual_labels, ml_proba),
+        "precision": safe_metric(precision_score, actual_labels, ml_binary),
+        "recall": safe_metric(recall_score, actual_labels, ml_binary),
+        "avgLatencyMs": float(np.mean(ml_latencies)),
+        "nSamples": len(test_df),
+    }
+    
+    # Random Forest metrics
+    rf_metrics = {
+        "model": "random_forest",
+        "f1": safe_metric(f1_score, actual_labels, rf_binary),
+        "aucRoc": safe_metric(roc_auc_score, actual_labels, rf_proba),
+        "precision": safe_metric(precision_score, actual_labels, rf_binary),
+        "recall": safe_metric(recall_score, actual_labels, rf_binary),
+        "avgLatencyMs": float(np.mean(rf_latencies)),
+        "nSamples": len(test_df),
+    }
+    
+    # Calculate agreement metrics
+    agreements = sum(
+        1 for r, m, f in zip(rule_categories, ml_categories, rf_categories)
+        if r == m == f
+    )
+    agreement_rate = agreements / len(test_df)
+    
+    # Calculate average delta between methods
+    deltas = [
+        abs(r - m) for r, m in zip(rule_predictions, ml_predictions)
+    ]
+    avg_delta = float(np.mean(deltas))
+    
+    # Category distribution
+    from collections import Counter
+    category_dist = dict(Counter(rule_categories))
+    
+    print(f"✅ Research metrics calculated for {len(test_df)} leads")
+    
+    return {
+        "metrics": [rule_metrics, ml_metrics, rf_metrics],
+        "comparison": {
+            "agreementRate": float(agreement_rate),
+            "avgDelta": avg_delta,
+            "categoryDistribution": category_dist,
+            "evaluationSize": len(test_df),
+        },
+        "summary": {
+            "bestF1": max(rule_metrics["f1"], ml_metrics["f1"], rf_metrics["f1"]),
+            "bestAucRoc": max(rule_metrics["aucRoc"], ml_metrics["aucRoc"], rf_metrics["aucRoc"]),
+            "fastestAvgLatency": min(rule_metrics["avgLatencyMs"], ml_metrics["avgLatencyMs"], rf_metrics["avgLatencyMs"]),
+        }
+    }
+
+
+@app.get(
+    "/research/metrics/stub",
+    response_model=list[MetricsResult],
+    tags=["Research"],
+    summary="[DEPRECATED] Placeholder metrics (Week 5)",
+)
+def research_metrics_stub():
     """
     Get aggregated performance metrics for all scoring models.
     
