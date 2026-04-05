@@ -10,6 +10,11 @@ export class AppController {
     return this.appService.getHello();
   }
 
+  @Get('health')
+  async getHealth() {
+    return this.appService.getHealth();
+  }
+
   @Get('test-db')
   async testDb() {
     return this.appService.testDb();

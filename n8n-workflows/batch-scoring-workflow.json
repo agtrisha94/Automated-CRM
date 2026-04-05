@@ -1,0 +1,292 @@
+{
+  "name": "Batch Lead Scoring Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "notes": "Runs every 6 hours to score all unscored leads.\n\nCan be adjusted to run more/less frequently."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://host.docker.internal:3000/api/leads",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "100"
+            },
+            {
+              "name": "status",
+              "value": "NEW"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-new-leads",
+      "name": "Fetch New Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [470, 300],
+      "notes": "Fetches leads with status=NEW that need scoring.\n\nGets up to 100 leads per batch."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-leads",
+              "leftValue": "={{ $json.data?.length }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-leads",
+      "name": "Has Leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [690, 300],
+      "notes": "Check if there are any leads to process."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "split-leads",
+      "name": "Split Into Items",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [910, 200],
+      "notes": "Splits the leads array into individual items for processing."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:3000/api/scoring/{{ $json.id }}/rules",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 10,
+              "batchInterval": 1000
+            }
+          }
+        }
+      },
+      "id": "score-lead-rules",
+      "name": "Score Lead (Rules)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1130, 200],
+      "notes": "Scores each lead using rule-based approach.\n\nBatched: 10 leads per second to avoid overwhelming the API."
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1350, 200],
+      "notes": "Combines all scoring results into a single summary."
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "batch_complete"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ],
+          "number": [
+            {
+              "name": "leadsProcessed",
+              "value": "={{ $json.data?.length || 0 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-summary",
+      "name": "Create Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1570, 200],
+      "notes": "Creates a summary of the batch processing."
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "no_leads_to_process"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "no-leads-message",
+      "name": "No Leads Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [910, 400],
+      "notes": "Message when there are no new leads to process."
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch New Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch New Leads": {
+      "main": [
+        [
+          {
+            "node": "Has Leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Leads?": {
+      "main": [
+        [
+          {
+            "node": "Split Into Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Leads Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Items": {
+      "main": [
+        [
+          {
+            "node": "Score Lead (Rules)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Lead (Rules)": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Create Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "CRM",
+      "createdAt": "2026-03-31T00:00:00.000Z",
+      "updatedAt": "2026-03-31T00:00:00.000Z"
+    },
+    {
+      "name": "Batch",
+      "createdAt": "2026-03-31T00:00:00.000Z",
+      "updatedAt": "2026-03-31T00:00:00.000Z"
+    },
+    {
+      "name": "Scoring",
+      "createdAt": "2026-03-31T00:00:00.000Z",
+      "updatedAt": "2026-03-31T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-31T00:00:00.000Z",
+  "versionId": "1"
+}
