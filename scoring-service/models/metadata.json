@@ -1,0 +1,24 @@
+{
+  "training_samples": 800,
+  "test_samples": 200,
+  "features": [
+    "emailOpens",
+    "websiteVisits",
+    "formFills",
+    "companySize_encoded",
+    "industry_encoded"
+  ],
+  "companySize_classes": [
+    "ENTERPRISE",
+    "SME",
+    "STARTUP"
+  ],
+  "industry_classes": [
+    "FINANCE",
+    "HEALTHCARE",
+    "MANUFACTURING",
+    "OTHER",
+    "RETAIL",
+    "TECH"
+  ]
+}

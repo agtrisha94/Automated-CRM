@@ -38,6 +38,10 @@ import time
 from typing import Optional
 from fastapi import FastAPI
 from pydantic import BaseModel
+import pickle
+import os
+from pathlib import Path
+import numpy as np
 
 # ============================================================================
 # FASTAPI APP INITIALIZATION
@@ -258,92 +262,274 @@ rule_scorer = RuleBasedScorer()
 
 
 # ============================================================================
-# ML SCORING STUBS (Week 4 Implementation)
+# ML SCORING WITH TRAINED MODELS (Week 4 Implementation)
 # ============================================================================
-# These will be implemented in Week 4 with actual trained models.
 
 class MLScorer:
     """
     Machine Learning Scorer (Logistic Regression)
     
-    STUB for Week 4 - will be implemented with:
-    - scikit-learn LogisticRegression model
+    IMPLEMENTATION:
+    - Uses scikit-learn LogisticRegression model
     - Trained on synthetic_leads_sigma10.json
     - Features: emailOpens, websiteVisits, formFills, companySize, industry
     - Target: actuallyConverted (binary)
+    - Returns probability converted (0-1) scaled to 0-100 score
     """
     
     def __init__(self):
-        self.model = None  # Will load trained model in Week 4
+        """
+        Load trained Logistic Regression model and encoders.
+        Models are trained using train_models.py script.
+        """
+        models_dir = Path(__file__).parent / "models"
+        
+        # Load Logistic Regression model
+        model_path = models_dir / "logistic_regression.pkl"
+        if model_path.exists():
+            with open(model_path, 'rb') as f:
+                self.model = pickle.load(f)
+            print("✅ Loaded Logistic Regression model")
+        else:
+            print("⚠️  Logistic Regression model not found - using fallback")
+            self.model = None
+        
+        # Load encoders for categorical features
+        encoders_path = models_dir / "encoders.pkl"
+        if encoders_path.exists():
+            with open(encoders_path, 'rb') as f:
+                self.encoders = pickle.load(f)
+            print("✅ Loaded feature encoders")
+        else:
+            print("⚠️  Encoders not found - using fallback")
+            self.encoders = None
+    
+    def _prepare_features(self, lead: LeadFeatures) -> np.ndarray:
+        """
+        Transform lead data into model input format.
+        
+        FEATURE ENGINEERING:
+        1. emailOpens (numeric)
+        2. websiteVisits (numeric)
+        3. formFills (numeric)
+        4. companySize (categorical → encoded)
+        5. industry (categorical → encoded)
+        
+        Returns: numpy array shape (1, 5)
+        """
+        # Encode company size
+        try:
+            company_size_encoded = self.encoders['companySize'].transform(
+                [lead.companySize or 'UNKNOWN']
+            )[0]
+        except:
+            company_size_encoded = 0
+        
+        # Encode industry
+        try:
+            industry_encoded = self.encoders['industry'].transform(
+                [lead.industry or 'UNKNOWN']
+            )[0]
+        except:
+            industry_encoded = 0
+        
+        # Build feature vector
+        features = np.array([[
+            lead.emailOpens,
+            lead.websiteVisits,
+            lead.formFills,
+            company_size_encoded,
+            industry_encoded
+        ]])
+        
+        return features
     
     def predict(self, lead: LeadFeatures) -> tuple[float, str]:
         """
         Predict conversion probability using logistic regression.
         
-        Week 4 implementation will:
+        PROCESS:
         1. Transform lead features into model input
         2. Call model.predict_proba() for probability
-        3. Scale to 0-100 score
-        4. Map to category
+        3. Scale probability (0-1) to score (0-100)
+        4. Map score to category (COLD/WARM/HOT)
         
-        For now, returns a simple heuristic based on engagement.
+        Returns: (score: float, category: str)
         """
-        # Temporary heuristic until model is trained
-        # This gives slightly different results than rules for testing
+        if self.model is None or self.encoders is None:
+            # Fallback if model not trained yet
+            return self._fallback_predict(lead)
+        
+        try:
+            # Prepare features
+            X = self._prepare_features(lead)
+            
+            # Get probability of conversion (class 1)
+            proba = self.model.predict_proba(X)[0, 1]
+            
+            # Scale to 0-100
+            score = proba * 100
+            
+            # Map to category
+            category = self._get_category(score)
+            
+            return float(score), category
+            
+        except Exception as e:
+            print(f"⚠️  ML prediction error: {e}")
+            return self._fallback_predict(lead)
+    
+    def _fallback_predict(self, lead: LeadFeatures) -> tuple[float, str]:
+        """Fallback scoring if model not available."""
         base_score = (
             lead.emailOpens * 4.5 +
             lead.websiteVisits * 2.8 +
             lead.formFills * 14
         )
-        
-        # Add some variation for company size
         size_bonus = {"STARTUP": 6, "SME": 11, "ENTERPRISE": 16}.get(
             lead.companySize, 0
         )
-        
         score = min(base_score + size_bonus, 100)
-        category = "HOT" if score >= 70 else "WARM" if score >= 40 else "COLD"
-        
+        category = self._get_category(score)
         return score, category
+    
+    def _get_category(self, score: float) -> str:
+        """Convert numeric score to category label."""
+        if score >= 70:
+            return "HOT"
+        elif score >= 40:
+            return "WARM"
+        else:
+            return "COLD"
 
 
 class RandomForestScorer:
     """
     Random Forest Scorer
     
-    STUB for Week 4 - will be implemented with:
-    - scikit-learn RandomForestClassifier
-    - Same training data as ML scorer
-    - Expected to have different accuracy/latency tradeoffs
+    IMPLEMENTATION:
+    - Uses scikit-learn RandomForestClassifier
+    - Same training data as Logistic Regression
+    - Ensemble method with multiple decision trees
+    - Expected to have higher accuracy but slower inference
     """
     
     def __init__(self):
-        self.model = None  # Will load trained model in Week 4
+        """
+        Load trained Random Forest model and encoders.
+        """
+        models_dir = Path(__file__).parent / "models"
+        
+        # Load Random Forest model
+        model_path = models_dir / "random_forest.pkl"
+        if model_path.exists():
+            with open(model_path, 'rb') as f:
+                self.model = pickle.load(f)
+            print("✅ Loaded Random Forest model")
+        else:
+            print("⚠️  Random Forest model not found - using fallback")
+            self.model = None
+        
+        # Load encoders
+        encoders_path = models_dir / "encoders.pkl"
+        if encoders_path.exists():
+            with open(encoders_path, 'rb') as f:
+                self.encoders = pickle.load(f)
+            print("✅ Loaded feature encoders (RF)")
+        else:
+            print("⚠️  Encoders not found - using fallback")
+            self.encoders = None
+    
+    def _prepare_features(self, lead: LeadFeatures) -> np.ndarray:
+        """
+        Transform lead data into model input format.
+        Same feature engineering as Logistic Regression.
+        """
+        # Encode company size
+        try:
+            company_size_encoded = self.encoders['companySize'].transform(
+                [lead.companySize or 'UNKNOWN']
+            )[0]
+        except:
+            company_size_encoded = 0
+        
+        # Encode industry
+        try:
+            industry_encoded = self.encoders['industry'].transform(
+                [lead.industry or 'UNKNOWN']
+            )[0]
+        except:
+            industry_encoded = 0
+        
+        # Build feature vector
+        features = np.array([[
+            lead.emailOpens,
+            lead.websiteVisits,
+            lead.formFills,
+            company_size_encoded,
+            industry_encoded
+        ]])
+        
+        return features
     
     def predict(self, lead: LeadFeatures) -> tuple[float, str]:
         """
         Predict conversion probability using random forest.
         
-        Week 4 implementation will use actual trained model.
-        For now, returns a simple heuristic.
+        PROCESS:
+        1. Transform lead features
+        2. Get average prediction across all trees
+        3. Scale to 0-100 score
+        4. Map to category
+        
+        Returns: (score: float, category: str)
         """
-        # Temporary heuristic with different weights
+        if self.model is None or self.encoders is None:
+            # Fallback if model not trained yet
+            return self._fallback_predict(lead)
+        
+        try:
+            # Prepare features
+            X = self._prepare_features(lead)
+            
+            # Get probability of conversion (class 1)
+            proba = self.model.predict_proba(X)[0, 1]
+            
+            # Scale to 0-100
+            score = proba * 100
+            
+            # Map to category
+            category = self._get_category(score)
+            
+            return float(score), category
+            
+        except Exception as e:
+            print(f"⚠️  RF prediction error: {e}")
+            return self._fallback_predict(lead)
+    
+    def _fallback_predict(self, lead: LeadFeatures) -> tuple[float, str]:
+        """Fallback scoring if model not available."""
         base_score = (
             lead.emailOpens * 5.2 +
             lead.websiteVisits * 3.1 +
             lead.formFills * 13.5
         )
-        
-        # Different industry weighting for variety
         industry_bonus = {
             "TECH": 12, "FINANCE": 9, "HEALTHCARE": 8,
             "RETAIL": 6, "MANUFACTURING": 5, "OTHER": 4
         }.get(lead.industry, 0)
-        
         score = min(base_score + industry_bonus, 100)
-        category = "HOT" if score >= 70 else "WARM" if score >= 40 else "COLD"
-        
+        category = self._get_category(score)
         return score, category
+    
+    def _get_category(self, score: float) -> str:
+        """Convert numeric score to category label."""
+        if score >= 70:
+            return "HOT"
+        elif score >= 40:
+            return "WARM"
+        else:
+            return "COLD"
 
 
 # Create singleton instances
