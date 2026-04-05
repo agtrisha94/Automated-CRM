@@ -9,7 +9,7 @@ import { SCORE_CATEGORY_COLORS } from '@/constants/colors'
 interface ScoreHistoryPoint {
   timestamp: string | number
   ruleScore?: number
-  lrScore?: number
+  mlScore?: number
   rfScore?: number
 }
 
@@ -80,10 +80,10 @@ export function ScoreHistoryTimeline({
                   isAnimationActive={false}
                 />
               )}
-              {formattedData.some((d) => d.lrScore !== undefined) && (
+              {formattedData.some((d) => d.mlScore !== undefined) && (
                 <Line
                   type="monotone"
-                  dataKey="lrScore"
+                  dataKey="mlScore"
                   stroke={SCORE_CATEGORY_COLORS.WARM}
                   name="Logistic Regression"
                   dot={{ r: 3 }}
@@ -116,7 +116,7 @@ export function ScoreHistoryTimeline({
               {activeMode === 'LR' && (
                 <Line
                   type="monotone"
-                  dataKey="lrScore"
+                  dataKey="mlScore"
                   stroke={SCORE_CATEGORY_COLORS.WARM}
                   name="Logistic Regression"
                   dot={{ r: 3 }}

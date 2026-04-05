@@ -79,7 +79,7 @@ export function LiveScoreTester() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-700">LR Score:</span>
-              <Badge variant="info">{compareResult.lrScore}</Badge>
+              <Badge variant="info">{compareResult.mlScore}</Badge>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-700">RF Score:</span>

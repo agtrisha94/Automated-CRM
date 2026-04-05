@@ -45,13 +45,13 @@ export interface FeatureImportance {
 export interface ScoringResult {
   leadId: string;
   ruleScore: number;
-  lrScore: number;
+  mlScore: number;
   rfScore: number;
   ruleCategory: ScoreCategory;
-  lrCategory: ScoreCategory;
+  mlCategory: ScoreCategory;
   rfCategory: ScoreCategory;
   ruleLatencyMs: number;
-  lrLatencyMs: number;
+  mlLatencyMs: number;
   rfLatencyMs: number;
   /** true when all 3 models agree on category */
   agreement: boolean;

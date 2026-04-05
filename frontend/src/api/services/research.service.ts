@@ -27,8 +27,54 @@ export async function getMetrics(): Promise<ResearchMetrics> {
     return mockResearchMetrics
   }
 
-  const { data } = await fastapiClient.get<ResearchMetrics>('/research/metrics')
-  return data
+  // Backend returns { metrics: [...], comparison: {...}, summary: {...} }
+  // We need to transform it to { rules, lr, rf } format
+  interface BackendMetrics {
+    model: string
+    f1: number
+    aucRoc: number
+    precision: number
+    recall: number
+    avgLatencyMs: number
+    nSamples: number
+  }
+
+  interface BackendResponse {
+    metrics: BackendMetrics[]
+    comparison: { agreementRate: number; avgDelta: number }
+    summary: { bestF1: number; bestAucRoc: number }
+  }
+
+  const { data } = await fastapiClient.get<BackendResponse>('/research/metrics')
+  
+  // Transform backend response to frontend expected format
+  const rulesMetrics = data.metrics.find((m: BackendMetrics) => m.model === 'rules')
+  const lrMetrics = data.metrics.find((m: BackendMetrics) => m.model === 'logistic_regression')
+  const rfMetrics = data.metrics.find((m: BackendMetrics) => m.model === 'random_forest')
+
+  return {
+    rules: {
+      f1: rulesMetrics?.f1 ?? 0,
+      precision: rulesMetrics?.precision ?? 0,
+      recall: rulesMetrics?.recall ?? 0,
+      aucRoc: rulesMetrics?.aucRoc ?? 0,
+      avgLatencyMs: rulesMetrics?.avgLatencyMs ?? 0,
+    },
+    lr: {
+      f1: lrMetrics?.f1 ?? 0,
+      precision: lrMetrics?.precision ?? 0,
+      recall: lrMetrics?.recall ?? 0,
+      aucRoc: lrMetrics?.aucRoc ?? 0,
+      avgLatencyMs: lrMetrics?.avgLatencyMs ?? 0,
+    },
+    rf: {
+      f1: rfMetrics?.f1 ?? 0,
+      precision: rfMetrics?.precision ?? 0,
+      recall: rfMetrics?.recall ?? 0,
+      aucRoc: rfMetrics?.aucRoc ?? 0,
+      avgLatencyMs: rfMetrics?.avgLatencyMs ?? 0,
+    },
+  }
 }
 
 /**
@@ -80,10 +126,10 @@ export async function scoreCompare(input: CompareScoreInput): Promise<any> {
     // Mock: generate random scores
     return {
       ruleScore: Math.floor(Math.random() * 100),
-      lrScore: Math.floor(Math.random() * 100),
+      mlScore: Math.floor(Math.random() * 100),
       rfScore: Math.floor(Math.random() * 100),
       ruleLatencyMs: Math.floor(Math.random() * 10) + 3,
-      lrLatencyMs: Math.floor(Math.random() * 30) + 30,
+      mlLatencyMs: Math.floor(Math.random() * 30) + 30,
       rfLatencyMs: Math.floor(Math.random() * 40) + 60,
     }
   }

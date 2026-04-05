@@ -53,7 +53,7 @@ export function ScoreComparisonPanel({ compareResult, isLoading = false, error }
     )
   }
 
-  const { ruleScore, lrScore, rfScore, ruleCategory, lrCategory, rfCategory, agreement, ruleLatencyMs, lrLatencyMs, rfLatencyMs } = compareResult
+  const { ruleScore, mlScore, rfScore, ruleCategory, mlCategory, rfCategory, agreement, ruleLatencyMs, mlLatencyMs, rfLatencyMs } = compareResult
 
   return (
     <div className="space-y-4">
@@ -63,12 +63,12 @@ export function ScoreComparisonPanel({ compareResult, isLoading = false, error }
       {/* 3-Column Comparison */}
       <div className="grid grid-cols-3 gap-3">
         <ScoreColumn title="Rule-Based" score={ruleScore} category={ruleCategory} latency={ruleLatencyMs} />
-        <ScoreColumn title="Logistic Regression" score={lrScore} category={lrCategory} latency={lrLatencyMs} />
+        <ScoreColumn title="Logistic Regression" score={mlScore} category={mlCategory} latency={mlLatencyMs} />
         <ScoreColumn title="Random Forest" score={rfScore} category={rfCategory} latency={rfLatencyMs} />
       </div>
 
       {/* Latency Details */}
-      <LatencyBadge ruleMs={ruleLatencyMs} lrMs={lrLatencyMs} rfMs={rfLatencyMs} />
+      <LatencyBadge ruleMs={ruleLatencyMs} lrMs={mlLatencyMs} rfMs={rfLatencyMs} />
     </div>
   )
 }

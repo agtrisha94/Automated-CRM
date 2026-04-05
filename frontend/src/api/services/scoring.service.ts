@@ -1,34 +1,34 @@
 /**
  * Scoring API Service
- * Handles lead scoring endpoints (both NestJS and FastAPI)
+ * Handles lead scoring endpoints (via NestJS backend)
  */
-import { nestjsClient, fastapiClient } from '../clients'
+import { nestjsClient } from '../clients'
 import type { CompareResult, ScoringMode } from '@/types/Scoring.types'
 import { config } from '../config'
 
 /**
  * Compare scores across all 3 models for a lead (Rule vs LR vs RF)
- * Calls FastAPI backend which runs all models and returns comparison
+ * Calls NestJS backend which fetches lead data and calls FastAPI for ML scoring
  */
 export async function compareScores(leadId: string): Promise<CompareResult> {
   if (config.USE_MOCKS) {
     // Mock: return random comparison result
     const ruleScore = Math.floor(Math.random() * 100)
-    const lrScore = Math.floor(Math.random() * 100)
+    const mlScore = Math.floor(Math.random() * 100)
     const rfScore = Math.floor(Math.random() * 100)
     
     return {
       leadId,
       ruleScore,
-      lrScore,
+      mlScore,
       rfScore,
       ruleLatencyMs: Math.floor(Math.random() * 10) + 3,
-      lrLatencyMs: Math.floor(Math.random() * 30) + 30,
+      mlLatencyMs: Math.floor(Math.random() * 30) + 30,
       rfLatencyMs: Math.floor(Math.random() * 40) + 60,
       ruleCategory: ruleScore >= 70 ? ('HOT' as const) : ruleScore >= 40 ? ('WARM' as const) : ('COLD' as const),
-      lrCategory: lrScore >= 70 ? ('HOT' as const) : lrScore >= 40 ? ('WARM' as const) : ('COLD' as const),
+      mlCategory: mlScore >= 70 ? ('HOT' as const) : mlScore >= 40 ? ('WARM' as const) : ('COLD' as const),
       rfCategory: rfScore >= 70 ? ('HOT' as const) : rfScore >= 40 ? ('WARM' as const) : ('COLD' as const),
-      agreement: ruleScore === lrScore,
+      agreement: ruleScore === mlScore,
       delta: rfScore - ruleScore,
       history: [],
       featureImportances: [
@@ -42,9 +42,8 @@ export async function compareScores(leadId: string): Promise<CompareResult> {
     }
   }
 
-  const { data } = await fastapiClient.post<CompareResult>('/score/compare', {
-    lead_id: leadId,
-  })
+  // Call NestJS backend which handles lead data fetching and FastAPI communication
+  const { data } = await nestjsClient.post<CompareResult>(`/scoring/${leadId}/compare`)
   return data
 }
 

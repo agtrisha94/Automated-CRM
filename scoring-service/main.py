@@ -37,6 +37,7 @@ Or via Docker Compose:
 import time
 from typing import Optional
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pickle
 import os
@@ -54,6 +55,15 @@ app = FastAPI(
         "lead scoring approaches for CRM lead prioritization research."
     ),
     version="0.2.0",  # Updated for Week 3
+)
+
+# Enable CORS for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3001"],  # Vite dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -1028,6 +1038,240 @@ def research_metrics_stub():
             nSamples=0,
         ),
     ]
+
+
+# ============================================================================
+# ADDITIONAL RESEARCH ENDPOINTS (Week 5 - Frontend Compatibility)
+# ============================================================================
+
+@app.get(
+    "/research/confusion-matrices",
+    tags=["Research"],
+    summary="Get confusion matrices for all models",
+)
+def research_confusion_matrices():
+    """
+    Calculate confusion matrices for all three scoring methods.
+    
+    Returns TP, FP, TN, FN for each model to visualize classification performance.
+    Uses actuallyConverted as ground truth and score >= 50 as positive prediction.
+    """
+    import json
+    from pathlib import Path
+    import pandas as pd
+    
+    # Load test dataset
+    possible_paths = [
+        Path("/scripts/synthetic_leads_sigma10.json"),
+        Path(__file__).parent.parent / "scripts" / "synthetic_leads_sigma10.json",
+    ]
+    
+    data_path = None
+    for path in possible_paths:
+        if path.exists():
+            data_path = path
+            break
+    
+    if data_path is None:
+        return {"error": "Test dataset not found"}
+    
+    with open(data_path, 'r') as f:
+        data = json.load(f)
+    
+    leads_data = data['leads'] if isinstance(data, dict) and 'leads' in data else data
+    df = pd.DataFrame(leads_data)
+    test_df = df.sample(n=min(500, len(df)), random_state=42)
+    
+    actual_labels = test_df['actuallyConverted'].values
+    
+    # Score each lead
+    rule_predictions = []
+    ml_predictions = []
+    rf_predictions = []
+    
+    for idx, row in test_df.iterrows():
+        lead = LeadFeatures(
+            leadId=row['id'],
+            emailOpens=row['emailOpens'],
+            websiteVisits=row['websiteVisits'],
+            formFills=row['formFills'],
+            companySize=row.get('companySize'),
+            industry=row.get('industry'),
+        )
+        
+        rule_score, _, _ = rule_scorer.calculate_score(lead)
+        ml_score, _ = ml_scorer.predict(lead)
+        rf_score, _ = rf_scorer.predict(lead)
+        
+        rule_predictions.append(1 if rule_score >= 50 else 0)
+        ml_predictions.append(1 if ml_score >= 50 else 0)
+        rf_predictions.append(1 if rf_score >= 50 else 0)
+    
+    def calc_confusion(predictions, actuals):
+        tp = sum(1 for p, a in zip(predictions, actuals) if p == 1 and a == 1)
+        fp = sum(1 for p, a in zip(predictions, actuals) if p == 1 and a == 0)
+        tn = sum(1 for p, a in zip(predictions, actuals) if p == 0 and a == 0)
+        fn = sum(1 for p, a in zip(predictions, actuals) if p == 0 and a == 1)
+        return {"tp": tp, "fp": fp, "tn": tn, "fn": fn}
+    
+    return {
+        "rules": calc_confusion(rule_predictions, actual_labels),
+        "lr": calc_confusion(ml_predictions, actual_labels),
+        "rf": calc_confusion(rf_predictions, actual_labels),
+    }
+
+
+@app.get(
+    "/research/feature-importances",
+    tags=["Research"],
+    summary="Get feature importances for all models",
+)
+def research_feature_importances():
+    """
+    Get feature importances for all three scoring methods.
+    
+    - Rule-based: Returns the weight multipliers
+    - Logistic Regression: Returns coefficient magnitudes
+    - Random Forest: Returns Gini importances
+    """
+    # Rule-based weights (from RuleBasedScorer)
+    rule_importances = [
+        {"name": "emailOpens", "importance": 0.25},     # 5 points * 5 max = 25
+        {"name": "websiteVisits", "importance": 0.30},  # 3 points * 10 max = 30
+        {"name": "formFills", "importance": 0.20},      # 10 points * 2 max = 20
+        {"name": "companySize", "importance": 0.10},    # Up to 10 points
+        {"name": "industry", "importance": 0.10},       # Up to 10 points
+        {"name": "status", "importance": 0.05},         # Up to 5 points
+    ]
+    
+    # Get LR coefficients if model is loaded
+    lr_importances = []
+    if hasattr(ml_scorer, 'model') and ml_scorer.model is not None:
+        feature_names = [
+            "emailOpens", "websiteVisits", "formFills",
+            "isCLevel", "isVP", "isDirector",
+            "isEnterprise", "isSME", "isTechFinance"
+        ]
+        coefs = ml_scorer.model.coef_[0]
+        # Normalize to sum to 1
+        abs_coefs = [abs(c) for c in coefs]
+        total = sum(abs_coefs) or 1
+        lr_importances = [
+            {"name": name, "importance": round(abs(coef) / total, 4)}
+            for name, coef in zip(feature_names, coefs)
+        ]
+    else:
+        lr_importances = [{"name": "model_not_loaded", "importance": 0}]
+    
+    # Get RF feature importances if model is loaded
+    rf_importances = []
+    if hasattr(rf_scorer, 'model') and rf_scorer.model is not None:
+        feature_names = [
+            "emailOpens", "websiteVisits", "formFills",
+            "isCLevel", "isVP", "isDirector",
+            "isEnterprise", "isSME", "isTechFinance"
+        ]
+        importances = rf_scorer.model.feature_importances_
+        rf_importances = [
+            {"name": name, "importance": round(float(imp), 4)}
+            for name, imp in zip(feature_names, importances)
+        ]
+    else:
+        rf_importances = [{"name": "model_not_loaded", "importance": 0}]
+    
+    return {
+        "rules": rule_importances,
+        "lr": lr_importances,
+        "rf": rf_importances,
+    }
+
+
+@app.post(
+    "/research/sparsity",
+    tags=["Research"],
+    summary="Run sparsity experiment (tests model behavior with sparse data)",
+)
+def research_sparsity():
+    """
+    Run a sparsity experiment to test how each model handles missing/sparse data.
+    
+    This simulates real-world scenarios where not all lead data is available.
+    Tests with 0%, 25%, 50%, 75% of features set to zero.
+    """
+    import json
+    from pathlib import Path
+    import pandas as pd
+    import numpy as np
+    
+    possible_paths = [
+        Path("/scripts/synthetic_leads_sigma10.json"),
+        Path(__file__).parent.parent / "scripts" / "synthetic_leads_sigma10.json",
+    ]
+    
+    data_path = None
+    for path in possible_paths:
+        if path.exists():
+            data_path = path
+            break
+    
+    if data_path is None:
+        return {"error": "Test dataset not found"}
+    
+    with open(data_path, 'r') as f:
+        data = json.load(f)
+    
+    leads_data = data['leads'] if isinstance(data, dict) and 'leads' in data else data
+    df = pd.DataFrame(leads_data)
+    test_df = df.sample(n=min(100, len(df)), random_state=42)  # Smaller sample for speed
+    
+    sparsity_levels = [0, 25, 50, 75]
+    results = []
+    
+    for sparsity in sparsity_levels:
+        rule_scores = []
+        ml_scores = []
+        rf_scores = []
+        
+        for idx, row in test_df.iterrows():
+            # Apply sparsity: set some features to 0
+            email = row['emailOpens'] if np.random.randint(100) >= sparsity else 0
+            visits = row['websiteVisits'] if np.random.randint(100) >= sparsity else 0
+            forms = row['formFills'] if np.random.randint(100) >= sparsity else 0
+            
+            lead = LeadFeatures(
+                leadId=row['id'],
+                emailOpens=email,
+                websiteVisits=visits,
+                formFills=forms,
+                companySize=row.get('companySize') if np.random.randint(100) >= sparsity else None,
+                industry=row.get('industry') if np.random.randint(100) >= sparsity else None,
+            )
+            
+            rule_score, _, _ = rule_scorer.calculate_score(lead)
+            ml_score, _ = ml_scorer.predict(lead)
+            rf_score, _ = rf_scorer.predict(lead)
+            
+            rule_scores.append(rule_score)
+            ml_scores.append(ml_score)
+            rf_scores.append(rf_score)
+        
+        results.append({
+            "sparsityPercent": sparsity,
+            "ruleAvgScore": round(float(np.mean(rule_scores)), 2),
+            "mlAvgScore": round(float(np.mean(ml_scores)), 2),
+            "rfAvgScore": round(float(np.mean(rf_scores)), 2),
+            "ruleStdDev": round(float(np.std(rule_scores)), 2),
+            "mlStdDev": round(float(np.std(ml_scores)), 2),
+            "rfStdDev": round(float(np.std(rf_scores)), 2),
+        })
+    
+    return {
+        "sparsityResults": results,
+        "summary": {
+            "mostRobust": "rules" if results[3]["ruleStdDev"] < min(results[3]["mlStdDev"], results[3]["rfStdDev"]) else "ml",
+            "totalSamples": len(test_df),
+        }
+    }
 
 
 # ============================================================================
