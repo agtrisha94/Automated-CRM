@@ -1,0 +1,192 @@
+{
+  "name": "Research Comparison Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "research-compare",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "research-compare-webhook",
+      "notes": "Triggers research comparison for all leads.\n\nPOST /webhook/research-compare\n{\n  \"limit\": 100,\n  \"status\": \"NEW\"\n}"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://host.docker.internal:3000/api/leads",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "={{ $json.limit || 50 }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-leads",
+      "name": "Fetch Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [470, 300],
+      "notes": "Fetches leads for comparison study.\n\nUses limit from webhook payload or defaults to 50."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "split-leads",
+      "name": "Split Into Items",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [690, 300],
+      "notes": "Splits leads array for individual processing."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:3000/api/scoring/{{ $json.id }}/compare",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "id": "compare-scores",
+      "name": "Compare All Methods",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [910, 300],
+      "notes": "Calls /compare endpoint for each lead.\n\nThis runs all 3 scoring methods:\n- Rule-based\n- Logistic Regression\n- Random Forest\n\nBatched: 5 per 2 seconds to avoid overload."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate comparison results for research analysis\nconst items = $input.all();\n\nlet totalLeads = items.length;\nlet agreements = 0;\nlet totalDelta = 0;\nlet totalRuleLatency = 0;\nlet totalMLLatency = 0;\nlet totalRFLatency = 0;\n\nlet categoryDistribution = {\n  rules: { COLD: 0, WARM: 0, HOT: 0 },\n  ml: { COLD: 0, WARM: 0, HOT: 0 },\n  rf: { COLD: 0, WARM: 0, HOT: 0 }\n};\n\nfor (const item of items) {\n  const data = item.json;\n  \n  if (data.agreement) agreements++;\n  totalDelta += data.delta || 0;\n  totalRuleLatency += data.ruleLatencyMs || 0;\n  totalMLLatency += data.mlLatencyMs || 0;\n  totalRFLatency += data.rfLatencyMs || 0;\n  \n  // Count category distribution\n  if (data.ruleCategory) categoryDistribution.rules[data.ruleCategory]++;\n  if (data.mlCategory) categoryDistribution.ml[data.mlCategory]++;\n  if (data.rfCategory) categoryDistribution.rf[data.rfCategory]++;\n}\n\nreturn [{\n  json: {\n    summary: {\n      totalLeads,\n      agreementRate: (agreements / totalLeads * 100).toFixed(2) + '%',\n      avgDelta: (totalDelta / totalLeads).toFixed(2),\n      avgLatency: {\n        rules: (totalRuleLatency / totalLeads).toFixed(2) + 'ms',\n        ml: (totalMLLatency / totalLeads).toFixed(2) + 'ms',\n        rf: (totalRFLatency / totalLeads).toFixed(2) + 'ms'\n      },\n      categoryDistribution\n    },\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "analyze-results",
+      "name": "Analyze Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1130, 300],
+      "notes": "Analyzes comparison results:\n- Agreement rate (how often all 3 methods agree)\n- Average delta (score difference)\n- Average latency per method\n- Category distribution"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1350, 300],
+      "notes": "Returns the research analysis results."
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Leads": {
+      "main": [
+        [
+          {
+            "node": "Split Into Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Items": {
+      "main": [
+        [
+          {
+            "node": "Compare All Methods",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare All Methods": {
+      "main": [
+        [
+          {
+            "node": "Analyze Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Results": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "CRM",
+      "createdAt": "2026-03-31T00:00:00.000Z",
+      "updatedAt": "2026-03-31T00:00:00.000Z"
+    },
+    {
+      "name": "Research",
+      "createdAt": "2026-03-31T00:00:00.000Z",
+      "updatedAt": "2026-03-31T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-31T00:00:00.000Z",
+  "versionId": "1"
+}

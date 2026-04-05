@@ -1,0 +1,294 @@
+{
+  "name": "Lead Scoring Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "score-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "score-lead-webhook",
+      "notes": "Receives lead data via POST request.\n\nExpected payload:\n{\n  \"leadId\": \"uuid\",\n  \"mode\": \"rules\" | \"ml\" | \"compare\"\n}"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-rules",
+              "leftValue": "={{ $json.mode }}",
+              "rightValue": "rules",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-mode-rules",
+      "name": "Is Rules Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [470, 300],
+      "notes": "Check if scoring mode is 'rules'"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:3000/api/scoring/{{ $json.leadId }}/rules",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "score-with-rules",
+      "name": "Score with Rules",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 200],
+      "notes": "Calls NestJS backend to score lead using rule-based approach.\n\nEndpoint: POST /api/scoring/{leadId}/rules"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-ml",
+              "leftValue": "={{ $('Webhook Trigger').item.json.mode }}",
+              "rightValue": "ml",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-mode-ml",
+      "name": "Is ML Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 400],
+      "notes": "Check if scoring mode is 'ml'"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:3000/api/scoring/{{ $('Webhook Trigger').item.json.leadId }}/ml",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "score-with-ml",
+      "name": "Score with ML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [930, 300],
+      "notes": "Calls NestJS backend to score lead using ML model.\n\nEndpoint: POST /api/scoring/{leadId}/ml"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:3000/api/scoring/{{ $('Webhook Trigger').item.json.leadId }}/compare",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "score-compare",
+      "name": "Compare All Methods",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [930, 500],
+      "notes": "Calls NestJS backend to compare all scoring methods.\n\nEndpoint: POST /api/scoring/{leadId}/compare\n\nReturns rule, ML, and RF scores side-by-side."
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "method",
+              "value": "={{ $json.category ? 'scoring_complete' : 'comparison_complete' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1160, 300],
+      "notes": "Formats the response to include status and original scoring data."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1380, 300],
+      "notes": "Returns the scoring result to the webhook caller."
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is Rules Mode?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Rules Mode?": {
+      "main": [
+        [
+          {
+            "node": "Score with Rules",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is ML Mode?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score with Rules": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is ML Mode?": {
+      "main": [
+        [
+          {
+            "node": "Score with ML",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compare All Methods",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score with ML": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare All Methods": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "CRM",
+      "createdAt": "2026-03-31T00:00:00.000Z",
+      "updatedAt": "2026-03-31T00:00:00.000Z"
+    },
+    {
+      "name": "Scoring",
+      "createdAt": "2026-03-31T00:00:00.000Z",
+      "updatedAt": "2026-03-31T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-31T00:00:00.000Z",
+  "versionId": "1"
+}
