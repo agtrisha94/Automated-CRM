@@ -97,12 +97,16 @@ function ScoreColumn({
   const bgColor = SCORE_CATEGORY_TAILWIND[categoryKey] || SCORE_CATEGORY_TAILWIND.COLD
 
   return (
-    <Card className={`p-4 text-center ${bgColor}`}>
-      <p className="text-xs font-medium mb-2">{title}</p>
-      <div className="mb-3">
-        <ScoreBadge score={score} category={categoryKey} />
+    <Card className={`p-4 ${bgColor}`}>
+      <div className="flex flex-col items-center">
+        <p className="text-xs font-medium mb-3">{title}</p>
+        <div className="mb-3 flex justify-center">
+          <ScoreBadge score={score} category={categoryKey} />
+        </div>
+        {latency !== undefined && (
+          <p className="text-xs text-gray-600 font-medium">{latency.toFixed(2)}ms</p>
+        )}
       </div>
-      {latency !== undefined && <p className="text-xs text-gray-600">{latency}ms</p>}
     </Card>
   )
 }

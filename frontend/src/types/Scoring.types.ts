@@ -57,9 +57,9 @@ export interface ScoringResult {
   agreement: boolean;
   /** rfScore minus ruleScore */
   delta: number;
-  history: ScoreHistoryEntry[];
+  history?: ScoreHistoryEntry[];
 }
 
 export interface CompareResult extends ScoringResult {
-  featureImportances: FeatureImportance[];
+  featureImportances?: FeatureImportance[];
 }

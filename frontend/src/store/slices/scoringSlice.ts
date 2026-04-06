@@ -6,7 +6,7 @@ import { compareScores } from '@/api/services/scoring.service'
 export interface LatencyRecord {
   leadId: string
   ruleMs: number
-  lrMs: number
+  mlMs: number
   rfMs: number
   timestamp: string
 }
@@ -59,7 +59,7 @@ const scoringSlice = createSlice({
         state.latencyHistory.push({
           leadId: action.payload.leadId,
           ruleMs: action.payload.ruleLatencyMs,
-          lrMs: action.payload.lrLatencyMs,
+          mlMs: action.payload.mlLatencyMs,
           rfMs: action.payload.rfLatencyMs,
           timestamp: new Date().toISOString(),
         })

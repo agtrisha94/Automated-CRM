@@ -40,9 +40,8 @@ export function LeadDetail({ lead, isOpen, onClose }: LeadDetailProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end z-50">
-      <div className="w-96 bg-white h-full shadow-xl overflow-y-auto">
-        <div className="p-6 space-y-6">
+    <div className="w-96 bg-white h-full shadow-xl overflow-y-auto border-l border-gray-200">
+      <div className="p-6 space-y-6">
           {/* Header */}
           <div className="flex justify-between items-start">
             <div>
@@ -162,6 +161,5 @@ export function LeadDetail({ lead, isOpen, onClose }: LeadDetailProps) {
           )}
         </div>
       </div>
-    </div>
   )
 }

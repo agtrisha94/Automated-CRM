@@ -25,10 +25,10 @@ export function ScoreBadge({ category, score, size = 'md' }: ScoreBadgeProps) {
   }[category]
 
   return (
-    <div className={`inline-flex items-center gap-2 font-bold rounded-full border-2 shadow-sm ${SCORE_CATEGORY_TAILWIND[category]} ${sizeClasses[size]}`}>
+    <div className={`inline-flex items-center justify-center gap-2 font-bold rounded-full border-2 shadow-sm min-w-30 ${SCORE_CATEGORY_TAILWIND[category]} ${sizeClasses[size]}`}>
       <span className="w-2.5 h-2.5 rounded-full bg-current opacity-75" />
       <span>{label}</span>
-      {score !== undefined && <span className="font-mono opacity-85 ml-1">{score.toFixed(0)}</span>}
+      {score !== undefined && <span className="font-mono opacity-85">{Math.round(score)}</span>}
     </div>
   )
 }

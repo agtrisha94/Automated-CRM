@@ -118,9 +118,9 @@ class CompareResult(BaseModel):
     ruleCategory: str
     mlCategory:   str
     rfCategory:   str
-    ruleLatencyMs: int
-    mlLatencyMs:   int
-    rfLatencyMs:   int
+    ruleLatencyMs: float
+    mlLatencyMs:   float
+    rfLatencyMs:   float
 
 
 class MetricsResult(BaseModel):
@@ -742,17 +742,17 @@ def score_compare(lead: LeadFeatures):
     # ── Score with Rules ──────────────────────────────────────────────────
     rule_start = time.perf_counter()
     rule_score, rule_category, _ = rule_scorer.calculate_score(lead)
-    rule_latency = int((time.perf_counter() - rule_start) * 1000)
+    rule_latency = round((time.perf_counter() - rule_start) * 1000, 2)
     
     # ── Score with ML (Logistic Regression) ───────────────────────────────
     ml_start = time.perf_counter()
     ml_score, ml_category = ml_scorer.predict(lead)
-    ml_latency = int((time.perf_counter() - ml_start) * 1000)
+    ml_latency = round((time.perf_counter() - ml_start) * 1000, 2)
     
     # ── Score with Random Forest ──────────────────────────────────────────
     rf_start = time.perf_counter()
     rf_score, rf_category = rf_scorer.predict(lead)
-    rf_latency = int((time.perf_counter() - rf_start) * 1000)
+    rf_latency = round((time.perf_counter() - rf_start) * 1000, 2)
     
     # ── Calculate comparison metrics ──────────────────────────────────────
     # Delta: absolute difference between rule and ML scores
