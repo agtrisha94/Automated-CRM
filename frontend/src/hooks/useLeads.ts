@@ -20,12 +20,10 @@ import type { LeadStatus } from '@/types/Leads.types'
 
 interface UseLeadsOptions {
   autoFetch?: boolean
-  page?: number
-  limit?: number
 }
 
 export function useLeads(options: UseLeadsOptions = {}) {
-  const { autoFetch = true, page = 1, limit = 20 } = options
+  const { autoFetch = true } = options
 
   const dispatch = useAppDispatch()
 
@@ -48,14 +46,14 @@ export function useLeads(options: UseLeadsOptions = {}) {
     async (params?: { page?: number; limit?: number; status?: LeadStatus; search?: string }) => {
       await dispatch(
         fetchLeads({
-          page: params?.page ?? page,
-          limit: params?.limit ?? limit,
+          page: params?.page !== undefined ? params.page : 1,
+          limit: params?.limit !== undefined ? params.limit : pagination.limit,
           status: params?.status,
           search: params?.search,
         })
       )
     },
-    [dispatch, page, limit]
+    [dispatch, pagination.limit]
   )
 
   // Auto-fetch on mount and when filters change

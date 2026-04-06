@@ -11,12 +11,22 @@ export interface PaginationProps {
   total: number
   onPageChange: (page: number) => void
   onLimitChange: (limit: number) => void
+  onPageLimitChange?: (page: number, limit: number) => void
 }
 
-export function Pagination({ page, limit, total, onPageChange, onLimitChange }: PaginationProps) {
+export function Pagination({ page, limit, total, onPageChange, onLimitChange, onPageLimitChange }: PaginationProps) {
   const totalPages = Math.ceil(total / limit)
   const isFirstPage = page === 1
   const isLastPage = page >= totalPages
+
+  const handleLimitChange = (newLimit: number) => {
+    if (onPageLimitChange) {
+      onPageLimitChange(1, newLimit)
+    } else {
+      onLimitChange(newLimit)
+      onPageChange(1)
+    }
+  }
 
   return (
     <div className="flex items-center justify-between bg-white p-4 border border-gray-200 rounded-lg">
@@ -31,8 +41,7 @@ export function Pagination({ page, limit, total, onPageChange, onLimitChange }: 
         <select
           value={limit}
           onChange={(e) => {
-            onLimitChange(Number(e.target.value))
-            onPageChange(1) // Reset to page 1
+            handleLimitChange(Number(e.target.value))
           }}
           className="px-3 py-1 border border-gray-300 rounded-md text-sm"
         >

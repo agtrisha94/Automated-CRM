@@ -4,6 +4,7 @@
  */
 import { nestjsClient } from '../clients'
 import { mockLeads } from '@/mocks/Leads.mock'
+import { DEFAULT_PAGE_SIZE } from '@/constants'
 import type { Lead, LeadStatus, InteractionType, CompanySize, Industry, LeadSource } from '@/types/Leads.types'
 import { LeadStatus as LeadStatusEnum, LeadSource as LeadSourceEnum } from '@/types/Leads.types'
 import { ScoreCategory as ScoreCategoryEnum } from '@/types/Scoring.types'
@@ -43,7 +44,7 @@ export interface InteractionInput {
  */
 export async function getLeads(
   page: number = 1,
-  limit: number = 20,
+  limit: number = DEFAULT_PAGE_SIZE,
   filters?: {
     status?: LeadStatus
     search?: string

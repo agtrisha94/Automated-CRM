@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
 import type { Lead, LeadStatus } from '@/types/Leads.types'
 import { getLeads, createLead, updateLeadStatus, type CreateLeadInput } from '@/api/services/leads.service'
+import { DEFAULT_PAGE_SIZE } from '@/constants'
 
 export interface PaginationState {
   page: number
@@ -20,7 +21,7 @@ export interface LeadsState {
 const initialState: LeadsState = {
   leads: [],
   selectedLead: null,
-  pagination: { page: 1, limit: 20, total: 0 },
+  pagination: { page: 1, limit: DEFAULT_PAGE_SIZE, total: 0 },
   status: 'idle',
   error: null,
 }
@@ -28,7 +29,7 @@ const initialState: LeadsState = {
 // Async thunks
 export const fetchLeads = createAsyncThunk(
   'leads/fetchLeads',
-  async ({ page = 1, limit = 20, status, search }: { page?: number; limit?: number; status?: LeadStatus; search?: string }) => {
+  async ({ page = 1, limit = DEFAULT_PAGE_SIZE, status, search }: { page?: number; limit?: number; status?: LeadStatus; search?: string }) => {
     const response = await getLeads(page, limit, { status, search })
     return response
   }

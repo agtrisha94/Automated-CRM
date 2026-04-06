@@ -16,7 +16,7 @@ import type { Lead } from '@/types/Leads.types'
 
 export function LeadListPage() {
   const dispatch = useAppDispatch()
-  const { pagedLeads, filteredLeads, pagination, loading, error, refetch } = useLeads({
+  const { pagedLeads, pagination, loading, error, refetch } = useLeads({
     autoFetch: true,
   })
 
@@ -38,6 +38,10 @@ export function LeadListPage() {
     refetch({ page: 1, limit })
   }
 
+  const handlePageLimitChange = (page: number, limit: number) => {
+    refetch({ page, limit })
+  }
+
   return (
     <div className="flex h-full">
       {/* Main Content */}
@@ -48,7 +52,8 @@ export function LeadListPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Leads</h1>
               <p className="text-gray-600 mt-1">
-                Showing {pagedLeads.length} of {filteredLeads.length} leads
+                Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
+                {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} leads
               </p>
             </div>
             <Button
@@ -76,9 +81,10 @@ export function LeadListPage() {
           <Pagination
             page={pagination.page}
             limit={pagination.limit}
-            total={filteredLeads.length}
+            total={pagination.total}
             onPageChange={handlePageChange}
             onLimitChange={handleLimitChange}
+            onPageLimitChange={handlePageLimitChange}
           />
         </div>
       </div>

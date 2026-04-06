@@ -21,6 +21,9 @@ export function SparsityExperiment({ data, progress, loading, onStart }: Sparsit
     ruleMean: point.ruleMean,
     lrMean: point.lrMean,
     rfMean: point.rfMean,
+    ruleStd: point.ruleStd,
+    lrStd: point.lrStd,
+    rfStd: point.rfStd,
   }))
 
   return (
@@ -53,17 +56,40 @@ export function SparsityExperiment({ data, progress, loading, onStart }: Sparsit
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="sparsityPercent" label={{ value: 'Sparsity %', position: 'insideBottomRight', offset: -5 }} />
-            <YAxis domain={[0, 100]} label={{ value: 'Accuracy %', angle: -90, position: 'insideLeft' }} />
+            <XAxis 
+              dataKey="datasetSize" 
+              label={{ value: 'Dataset Size', position: 'insideBottomRight', offset: -5 }} 
+              type="number"
+            />
+            <YAxis 
+              domain={[0, 100]} 
+              label={{ value: 'Accuracy %', angle: -90, position: 'insideLeft' }} 
+            />
             <Tooltip formatter={(value) => (typeof value === 'number' ? value.toFixed(1) : value)} />
             <Legend />
             <Line
               type="monotone"
-              dataKey="modelAccuracy"
-              stroke="#10b981"
+              dataKey="ruleMean"
+              stroke="#3b82f6"
               dot={false}
               strokeWidth={2}
-              name="Model Accuracy"
+              name="Rule-Based"
+            />
+            <Line
+              type="monotone"
+              dataKey="lrMean"
+              stroke="#8b5cf6"
+              dot={false}
+              strokeWidth={2}
+              name="Logistic Regression"
+            />
+            <Line
+              type="monotone"
+              dataKey="rfMean"
+              stroke="#ef4444"
+              dot={false}
+              strokeWidth={2}
+              name="Random Forest"
             />
           </LineChart>
         </ResponsiveContainer>
