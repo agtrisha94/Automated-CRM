@@ -290,7 +290,14 @@ export class ScoringService {
       };
     } catch (error) {
       // Log error and re-throw for controller to handle
-      this.logger.error(`ML scoring failed for lead ${leadId}`, error);
+      if (error instanceof Error) {
+        this.logger.error(
+          `ML scoring failed for lead ${leadId}: ${error.message}`,
+          error.stack,
+        );
+      } else {
+        this.logger.error(`ML scoring failed for lead ${leadId}`, error);
+      }
       throw error;
     }
   }
@@ -354,21 +361,25 @@ export class ScoringService {
 
     try {
       // Call the compare endpoint on FastAPI
+      const requestPayload = {
+        leadId: lead.id,
+        emailOpens: lead.emailOpens,
+        websiteVisits: lead.websiteVisits,
+        formFills: lead.formFills,
+        companySize: lead.companySize,
+        industry: lead.industry,
+        status: lead.status,
+        source: lead.source,
+        createdAt: lead.createdAt?.toISOString(),
+        lastActivityAt: lead.updatedAt.toISOString(),  // Use updatedAt as proxy for last activity
+      };
+
+      this.logger.debug(`Calling FastAPI /score/compare for lead ${leadId}`, requestPayload);
+
       const response: AxiosResponse<CompareResponse> = await firstValueFrom(
         this.httpService.post<CompareResponse>(
           `${this.scoringServiceUrl}/score/compare`,
-          {
-            leadId: lead.id,
-            emailOpens: lead.emailOpens,
-            websiteVisits: lead.websiteVisits,
-            formFills: lead.formFills,
-            companySize: lead.companySize,
-            industry: lead.industry,
-            status: lead.status,
-            source: lead.source,
-            createdAt: lead.createdAt?.toISOString(),
-            lastActivityAt: lead.updatedAt.toISOString(),  // Use updatedAt as proxy for last activity
-          },
+          requestPayload,
         ),
       );
 
@@ -409,6 +420,14 @@ export class ScoringService {
       };
     } catch (error) {
       this.logger.error(`Score comparison failed for lead ${leadId}`, error);
+      
+      // Provide more detailed error information
+      if (error instanceof Error) {
+        throw new Error(
+          `Failed to compare scores for lead ${leadId}: ${error.message}`,
+        );
+      }
+      
       throw error;
     }
   }

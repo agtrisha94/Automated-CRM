@@ -31,23 +31,33 @@ async function scoreAllLeads() {
         industry: lead.industry
       });
 
-      const { ruleScore, mlScore, rfScore } = response.data;
+      const { 
+        ruleScore, mlScore, rfScore, 
+        ruleCategory, mlCategory, rfCategory,
+        ruleLatencyMs, mlLatencyMs, rfLatencyMs,
+        delta, agreement, timeRelevance
+      } = response.data;
 
       // Create scoring comparison record
       await prisma.scoringComparison.create({
         data: {
           leadId: lead.id,
-          ruleScore: ruleScore.score,
-          mlScore: mlScore.probability * 100,
-          rfScore: rfScore.probability * 100,
-          delta: Math.abs(ruleScore.score - (mlScore.probability * 100)),
-          ruleCategory: ruleScore.category as 'COLD' | 'WARM' | 'HOT',
-          mlCategory: mlScore.category as 'COLD' | 'WARM' | 'HOT',
-          rfCategory: rfScore.category as 'COLD' | 'WARM' | 'HOT',
-          agreement: ruleScore.category === mlScore.category && mlScore.category === rfScore.category,
-          ruleLatencyMs: 0,
-          mlLatencyMs: 0,
-          rfLatencyMs: 0
+          ruleScore: Math.round(ruleScore),
+          mlScore: mlScore,
+          rfScore: rfScore,
+          delta: delta,
+          ruleCategory: ruleCategory as 'COLD' | 'WARM' | 'HOT',
+          mlCategory: mlCategory as 'COLD' | 'WARM' | 'HOT',
+          rfCategory: rfCategory as 'COLD' | 'WARM' | 'HOT',
+          agreement: agreement,
+          ruleLatencyMs: Math.round(ruleLatencyMs),
+          mlLatencyMs: Math.round(mlLatencyMs),
+          rfLatencyMs: Math.round(rfLatencyMs),
+          daysSinceCreated: timeRelevance?.daysSinceCreated,
+          daysSinceActivity: timeRelevance?.daysSinceActivity,
+          recencyScore: timeRelevance?.recencyScore,
+          engagementVelocity: timeRelevance?.engagementVelocity,
+          activityFreshness: timeRelevance?.activityFreshness
         }
       });
 
@@ -55,10 +65,14 @@ async function scoreAllLeads() {
       await prisma.lead.update({
         where: { id: lead.id },
         data: {
-          ruleScore: ruleScore.score,
-          mlScore: mlScore.probability * 100,
-          rfScore: rfScore.probability * 100,
-          scoreCategory: ruleScore.category as 'COLD' | 'WARM' | 'HOT'
+          ruleScore: Math.round(ruleScore),
+          mlScore: mlScore,
+          rfScore: rfScore,
+          scoreCategory: ruleCategory as 'COLD' | 'WARM' | 'HOT',
+          lastActivityAt: lead.lastActivityAt ? new Date(lead.lastActivityAt) : null,
+          recencyScore: timeRelevance?.recencyScore,
+          engagementVelocity: timeRelevance?.engagementVelocity,
+          activityFreshness: timeRelevance?.activityFreshness
         }
       });
 

@@ -63,14 +63,30 @@ export async function runSparsity(): Promise<AnalyticsPayload> {
  * Compare scores across all 3 models for given features
  * Allows ad-hoc scoring comparison without a stored lead
  */
-export async function scoreCompare(_input: CompareScoreInput): Promise<any> {
-  // Always use mocks for score comparison (backend might not be ready)
-  return {
-    ruleScore: Math.floor(Math.random() * 100),
-    mlScore: Math.floor(Math.random() * 100),
-    rfScore: Math.floor(Math.random() * 100),
-    ruleLatencyMs: Math.floor(Math.random() * 10) + 3,
-    mlLatencyMs: Math.floor(Math.random() * 30) + 30,
-    rfLatencyMs: Math.floor(Math.random() * 40) + 60,
+export async function scoreCompare(input: CompareScoreInput): Promise<any> {
+  if (config.USE_MOCKS) {
+    return {
+      ruleScore: 72.5,
+      mlScore: 68.3,
+      rfScore: 71.2,
+      ruleCategory: 'WARM',
+      mlCategory: 'WARM',
+      rfCategory: 'WARM',
+      agreement: true,
+      ruleLatencyMs: 4,
+      mlLatencyMs: 23,
+      rfLatencyMs: 18,
+      delta: 4.2,
+      timeRelevance: {
+        daysSinceCreated: 45.5,
+        daysSinceActivity: 2.3,
+        recencyScore: 87.5,
+        engagementVelocity: 3.2,
+        activityFreshness: 'active'
+      }
+    }
   }
+
+  const { data } = await fastapiClient.post('/score/compare', input.features)
+  return data
 }

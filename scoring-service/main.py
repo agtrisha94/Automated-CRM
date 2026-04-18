@@ -92,6 +92,8 @@ class LeadFeatures(BaseModel):
     industry:      Optional[str] = None   # TECH | FINANCE | HEALTHCARE | etc.
     status:        Optional[str] = None   # NEW | CONTACTED | QUALIFIED | CONVERTED | LOST
     source:        Optional[str] = None   # FORM | WEBHOOK | MANUAL | IMPORT
+    createdAt:     Optional[str] = None   # ISO8601 timestamp when lead was created
+    lastActivityAt: Optional[str] = None  # ISO8601 timestamp of last activity
 
 
 class ScoreResult(BaseModel):
@@ -104,6 +106,15 @@ class ScoreResult(BaseModel):
     score:     float    # Numeric score (0-100 typically)
     category:  str      # COLD | WARM | HOT
     latencyMs: int      # How long scoring took (for research comparison)
+
+
+class TimeRelevanceData(BaseModel):
+    """Time-based features for a lead (Week 5)"""
+    daysSinceCreated: Optional[float] = None
+    daysSinceActivity: Optional[float] = None
+    recencyScore: float = 0.0
+    engagementVelocity: float = 0.0
+    activityFreshness: str = "unknown"
 
 
 class CompareResult(BaseModel):
@@ -125,6 +136,7 @@ class CompareResult(BaseModel):
     ruleLatencyMs: float
     mlLatencyMs:   float
     rfLatencyMs:   float
+    timeRelevance: Optional[TimeRelevanceData] = None  # NEW: Time-based features
 
 
 class MetricsResult(BaseModel):
@@ -1017,6 +1029,16 @@ def score_compare(lead: LeadFeatures):
     # Agreement: do all three methods agree on the category?
     agreement = (rule_category == ml_category == rf_category)
     
+    # ── Calculate time-based features (Week 5) ────────────────────────────
+    time_features = TimeRelevanceCalculator.get_all_time_features(lead)
+    time_relevance = TimeRelevanceData(
+        daysSinceCreated=time_features.get("days_since_created"),
+        daysSinceActivity=time_features.get("days_since_activity"),
+        recencyScore=time_features.get("recency_score", 0.0),
+        engagementVelocity=time_features.get("engagement_velocity", 0.0),
+        activityFreshness=time_features.get("activity_freshness", "unknown"),
+    )
+    
     return CompareResult(
         leadId=lead.leadId,
         ruleScore=rule_score,
@@ -1030,6 +1052,7 @@ def score_compare(lead: LeadFeatures):
         ruleLatencyMs=rule_latency,
         mlLatencyMs=ml_latency,
         rfLatencyMs=rf_latency,
+        timeRelevance=time_relevance,
     )
 
 
