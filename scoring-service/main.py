@@ -36,6 +36,7 @@ Or via Docker Compose:
 
 import time
 from typing import Optional
+from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -139,6 +140,210 @@ class MetricsResult(BaseModel):
 
 
 # ============================================================================
+# TIME RELEVANCE FEATURE ENGINEERING (Week 5)
+# ============================================================================
+# Helper functions to extract temporal features from lead timestamps
+
+class TimeRelevanceCalculator:
+    """
+    Calculate time-based features for lead scoring.
+    
+    TIME RELEVANCE HYPOTHESIS:
+    - Older leads (created long ago) are less valuable
+    - Leads with recent activity are more engaged
+    - Recency is a strong predictor of conversion
+    
+    FEATURES CALCULATED:
+    1. days_since_created: How long the lead has been in the system (0-365+)
+    2. days_since_activity: How long since the last engagement (0-365+)
+    3. recency_score: Exponential decay function (higher is more recent)
+    4. engagement_velocity: Engagement events per day since creation
+    """
+    
+    # Thresholds for recency scoring
+    FRESH_THRESHOLD_DAYS = 7      # Lead < 7 days old = "fresh"
+    ACTIVE_THRESHOLD_DAYS = 3     # Activity < 3 days old = "active"
+    STALE_THRESHOLD_DAYS = 30     # No activity > 30 days = "stale"
+    
+    @staticmethod
+    def parse_iso8601(timestamp_str: Optional[str]) -> Optional[datetime]:
+        """
+        Parse ISO8601 timestamp string.
+        
+        Handles various formats:
+        - "2026-03-15T10:43:53.674630+00:00"
+        - "2026-03-15T10:43:53Z"
+        - "2026-03-15T10:43:53"
+        
+        Args:
+            timestamp_str: ISO8601 formatted timestamp or None
+            
+        Returns:
+            datetime object in UTC or None if parsing fails
+        """
+        if not timestamp_str:
+            return None
+        
+        try:
+            # Try parsing with timezone info
+            if timestamp_str.endswith('Z'):
+                timestamp_str = timestamp_str[:-1] + '+00:00'
+            
+            # Use fromisoformat which handles +00:00 format
+            dt = datetime.fromisoformat(timestamp_str)
+            
+            # Ensure UTC timezone
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            else:
+                dt = dt.astimezone(timezone.utc)
+            
+            return dt
+        except Exception as e:
+            print(f"⚠️  Failed to parse timestamp '{timestamp_str}': {e}")
+            return None
+    
+    @staticmethod
+    def calculate_days_since(timestamp_str: Optional[str]) -> Optional[float]:
+        """
+        Calculate days since a given timestamp.
+        
+        Args:
+            timestamp_str: ISO8601 formatted timestamp
+            
+        Returns:
+            Number of days (as float, can be fractional)
+            None if timestamp is invalid or missing
+        """
+        dt = TimeRelevanceCalculator.parse_iso8601(timestamp_str)
+        if dt is None:
+            return None
+        
+        now = datetime.now(timezone.utc)
+        delta = now - dt
+        days = delta.total_seconds() / (24 * 3600)
+        
+        return max(0.0, days)  # Never negative
+    
+    @staticmethod
+    def calculate_recency_score(days_since: Optional[float]) -> float:
+        """
+        Calculate exponential recency score.
+        
+        FORMULA: recency_score = 100 × e^(-days/decay_rate)
+        
+        This creates an exponential decay where:
+        - days=0 → score=100 (most recent)
+        - days=7 → score≈50 (one week old)
+        - days=30 → score≈10 (one month old)
+        - days=365 → score≈0.001 (one year old)
+        
+        DECAY_RATE=7: One week is the "half-life" for recency
+        
+        Args:
+            days_since: Number of days since event
+            
+        Returns:
+            Recency score (0-100)
+        """
+        if days_since is None or days_since < 0:
+            return 0.0
+        
+        # Exponential decay with 7-day half-life
+        decay_rate = 7.0
+        recency = 100.0 * np.exp(-days_since / decay_rate)
+        
+        return float(recency)
+    
+    @staticmethod
+    def calculate_engagement_velocity(
+        total_engagements: int,
+        days_since_created: Optional[float]
+    ) -> float:
+        """
+        Calculate engagement velocity (events per day).
+        
+        FORMULA: velocity = total_engagements / max(days_since_created, 1)
+        
+        HIGH VELOCITY = Many events in short time = Very engaged
+        LOW VELOCITY = Few events over long time = Stale lead
+        
+        Args:
+            total_engagements: emailOpens + websiteVisits + formFills
+            days_since_created: How long lead has existed
+            
+        Returns:
+            Engagement events per day (capped at 10.0)
+        """
+        if days_since_created is None or days_since_created == 0:
+            # Lead just created - no history yet
+            return 0.0
+        
+        velocity = total_engagements / days_since_created
+        
+        # Cap at reasonable maximum (e.g., 10 events/day is very high)
+        return min(velocity, 10.0)
+    
+    @staticmethod
+    def get_all_time_features(lead: 'LeadFeatures') -> dict:
+        """
+        Calculate all time-based features for a lead.
+        
+        Returns dict with:
+        - days_since_created: How old the lead is
+        - days_since_activity: How stale the lead is
+        - recency_score: Exponential decay of last activity
+        - engagement_velocity: Events per day
+        - activity_freshness: Whether last activity is fresh/active/stale
+        
+        Args:
+            lead: LeadFeatures object
+            
+        Returns:
+            dict with all calculated time features
+        """
+        days_since_created = TimeRelevanceCalculator.calculate_days_since(
+            lead.createdAt
+        )
+        days_since_activity = TimeRelevanceCalculator.calculate_days_since(
+            lead.lastActivityAt
+        )
+        
+        recency_score = TimeRelevanceCalculator.calculate_recency_score(
+            days_since_activity
+        )
+        
+        total_engagements = (
+            lead.emailOpens + lead.websiteVisits + lead.formFills
+        )
+        
+        engagement_velocity = (
+            TimeRelevanceCalculator.calculate_engagement_velocity(
+                total_engagements,
+                days_since_created
+            )
+        )
+        
+        # Classify activity freshness
+        if days_since_activity is None:
+            activity_freshness = "unknown"
+        elif days_since_activity < TimeRelevanceCalculator.ACTIVE_THRESHOLD_DAYS:
+            activity_freshness = "active"
+        elif days_since_activity < TimeRelevanceCalculator.STALE_THRESHOLD_DAYS:
+            activity_freshness = "warm"
+        else:
+            activity_freshness = "stale"
+        
+        return {
+            "days_since_created": days_since_created,
+            "days_since_activity": days_since_activity,
+            "recency_score": recency_score,
+            "engagement_velocity": engagement_velocity,
+            "activity_freshness": activity_freshness,
+        }
+
+
+# ============================================================================
 # RULE-BASED SCORING ENGINE (Week 3 Implementation)
 # ============================================================================
 # This is a deterministic scoring approach using weighted rules.
@@ -218,7 +423,7 @@ class RuleBasedScorer:
             
         Returns:
             tuple of (score, category, breakdown)
-            - score: float, total points (0-100+)
+            - score: float, total points (0-100)
             - category: str, "COLD" | "WARM" | "HOT"
             - breakdown: dict, points from each component
         """
@@ -249,10 +454,32 @@ class RuleBasedScorer:
             if lead.industry else 0
         )
         
-        # Step 4: Sum all points
-        score = sum(breakdown.values())
+        # Step 4: Calculate time-based adjustments (Week 5)
+        time_features = TimeRelevanceCalculator.get_all_time_features(lead)
         
-        # Step 5: Determine category based on thresholds
+        # Recency adjustment: boost fresh activity (0-15 points)
+        recency_adjustment = time_features["recency_score"] * 0.15
+        breakdown["recency"] = recency_adjustment
+        
+        # Velocity adjustment: boost high engagement rate (0-10 points)
+        # Velocity is 0-10 (events/day), scale to 0-10 points
+        velocity_adjustment = time_features["engagement_velocity"]
+        breakdown["velocity"] = velocity_adjustment
+        
+        # Activity freshness bonus: additional points for recent activity
+        freshness_bonus = {
+            "active": 5,      # Last activity < 3 days = +5 points
+            "warm": 2,        # Activity 3-30 days = +2 points
+            "stale": -5,      # Activity > 30 days = -5 points (penalty)
+            "unknown": 0      # No activity timestamp = neutral
+        }.get(time_features["activity_freshness"], 0)
+        breakdown["freshness"] = freshness_bonus
+        
+        # Step 5: Sum all points and cap at 100
+        score = sum(breakdown.values())
+        score = max(0, min(score, 100))  # Ensure 0 <= score <= 100
+        
+        # Step 6: Determine category based on thresholds
         category = self._get_category(score)
         
         return score, category, breakdown
@@ -318,14 +545,16 @@ class MLScorer:
         """
         Transform lead data into model input format.
         
-        FEATURE ENGINEERING:
+        FEATURE ENGINEERING (WITH TIME RELEVANCE - Week 5):
         1. emailOpens (numeric)
         2. websiteVisits (numeric)
         3. formFills (numeric)
         4. companySize (categorical → encoded)
         5. industry (categorical → encoded)
+        6. recency_score (time-based, 0-100)
+        7. engagement_velocity (time-based, 0-10)
         
-        Returns: numpy array shape (1, 5)
+        Returns: numpy array shape (1, 7)
         """
         # Encode company size
         try:
@@ -343,13 +572,20 @@ class MLScorer:
         except:
             industry_encoded = 0
         
-        # Build feature vector
+        # Get time-based features
+        time_features = TimeRelevanceCalculator.get_all_time_features(lead)
+        recency_score = time_features["recency_score"]
+        engagement_velocity = time_features["engagement_velocity"]
+        
+        # Build feature vector (7 features)
         features = np.array([[
             lead.emailOpens,
             lead.websiteVisits,
             lead.formFills,
             company_size_encoded,
-            industry_encoded
+            industry_encoded,
+            recency_score,
+            engagement_velocity
         ]])
         
         return features
@@ -453,7 +689,17 @@ class RandomForestScorer:
     def _prepare_features(self, lead: LeadFeatures) -> np.ndarray:
         """
         Transform lead data into model input format.
-        Same feature engineering as Logistic Regression.
+        
+        FEATURE ENGINEERING (WITH TIME RELEVANCE - Week 5):
+        1. emailOpens (numeric)
+        2. websiteVisits (numeric)
+        3. formFills (numeric)
+        4. companySize (categorical → encoded)
+        5. industry (categorical → encoded)
+        6. recency_score (time-based, 0-100)
+        7. engagement_velocity (time-based, 0-10)
+        
+        Returns: numpy array shape (1, 7)
         """
         # Encode company size
         try:
@@ -471,13 +717,20 @@ class RandomForestScorer:
         except:
             industry_encoded = 0
         
-        # Build feature vector
+        # Get time-based features
+        time_features = TimeRelevanceCalculator.get_all_time_features(lead)
+        recency_score = time_features["recency_score"]
+        engagement_velocity = time_features["engagement_velocity"]
+        
+        # Build feature vector (7 features)
         features = np.array([[
             lead.emailOpens,
             lead.websiteVisits,
             lead.formFills,
             company_size_encoded,
-            industry_encoded
+            industry_encoded,
+            recency_score,
+            engagement_velocity
         ]])
         
         return features
@@ -1284,15 +1537,18 @@ def debug_breakdown(lead: LeadFeatures):
     Show detailed scoring breakdown for debugging.
     
     Useful for understanding why a lead got a particular score.
-    Shows points from each component.
+    Shows points from each component including time relevance features.
     
     Args:
         lead: LeadFeatures with engagement data
         
     Returns:
-        Detailed breakdown of score calculation
+        Detailed breakdown of score calculation including time features
     """
     score, category, breakdown = rule_scorer.calculate_score(lead)
+    
+    # Also get time features for display
+    time_features = TimeRelevanceCalculator.get_all_time_features(lead)
     
     return {
         "leadId": lead.leadId,
@@ -1302,9 +1558,18 @@ def debug_breakdown(lead: LeadFeatures):
             "formFills": lead.formFills,
             "companySize": lead.companySize,
             "industry": lead.industry,
+            "createdAt": lead.createdAt,
+            "lastActivityAt": lead.lastActivityAt,
         },
-        "breakdown": breakdown,
-        "totalScore": score,
+        "timeFeatures": {
+            "daysSinceCreated": time_features["days_since_created"],
+            "daysSinceActivity": time_features["days_since_activity"],
+            "recencyScore": round(time_features["recency_score"], 2),
+            "engagementVelocity": round(time_features["engagement_velocity"], 2),
+            "activityFreshness": time_features["activity_freshness"],
+        },
+        "breakdown": {k: round(v, 2) for k, v in breakdown.items()},
+        "totalScore": round(score, 2),
         "category": category,
         "thresholds": RuleBasedScorer.THRESHOLDS,
     }
