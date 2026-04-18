@@ -16,6 +16,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       ? exception.getResponse()
       : 'Internal server error';
 
+    // Log the actual error for debugging
+    console.error('Exception caught:', exception);
+    if (exception instanceof Error) {
+      console.error('Error stack:', exception.stack);
+    }
+
     res.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),

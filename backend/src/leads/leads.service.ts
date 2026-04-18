@@ -45,4 +45,15 @@ export class LeadsService {
       data: { status: LeadStatus.LOST },
     });
   }
+
+  async getInteractions(leadId: string) {
+    // Verify lead exists
+    await this.findOne(leadId);
+    
+    // Fetch interactions for this specific lead, ordered by most recent
+    return this.prisma.interaction.findMany({
+      where: { leadId },
+      orderBy: { timestamp: 'desc' },
+    });
+  }
 }

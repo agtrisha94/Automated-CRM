@@ -32,6 +32,11 @@ export class LeadsController {
     return this.leadsService.findOne(id);
   }
 
+  @Get(':id/interactions')
+  getInteractions(@Param('id') id: string) {
+    return this.leadsService.getInteractions(id);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateLeadDto) {
     return this.leadsService.update(id, dto);

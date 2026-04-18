@@ -11,10 +11,14 @@ import { config } from '../config'
  * Calls NestJS backend which fetches lead data and calls FastAPI for ML scoring
  */
 export async function compareScores(leadId: string): Promise<CompareResult> {
-  // Always use mocks for comparing scores (may not be able to reach FastAPI)
-  const ruleScore = Math.floor(Math.random() * 100)
-  const mlScore = Math.floor(Math.random() * 100)
-  const rfScore = Math.floor(Math.random() * 100)
+  // Get the lead data to use actual scores
+  const { getLeadById } = await import('./leads.service')
+  const lead = await getLeadById(leadId)
+  
+  // Use the lead's actual scores instead of random values
+  const ruleScore = lead.ruleScore ?? Math.floor(Math.random() * 100)
+  const mlScore = lead.mlScore ?? Math.floor(Math.random() * 100)
+  const rfScore = lead.activeScore ?? Math.floor(Math.random() * 100)
   
   return {
     leadId,

@@ -24,6 +24,7 @@ model Lead {
 
   ruleScore     Int?
   mlScore       Float?
+  rfScore       Float? 
   activeScore   Int           @default(0)
   scoreCategory ScoreCategory @default(COLD)
 
@@ -73,12 +74,15 @@ model ScoringComparison {
   leadId        String
   ruleScore     Int
   mlScore       Float
+  rfScore       Float?
   delta         Float
   ruleCategory  ScoreCategory
   mlCategory    ScoreCategory
+  rfCategory    ScoreCategory?
   agreement     Boolean
   ruleLatencyMs Int
   mlLatencyMs   Int
+  rfLatencyMs   Int?
   createdAt     DateTime      @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id])

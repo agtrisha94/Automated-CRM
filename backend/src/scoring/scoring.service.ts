@@ -309,6 +309,35 @@ export class ScoringService {
       where: { id: leadId },
     });
 
+    // Check if a recent comparison exists (within last 60 seconds)
+    const recentComparison = await this.prisma.scoringComparison.findFirst({
+      where: {
+        leadId,
+        createdAt: {
+          gte: new Date(Date.now() - 60 * 1000), // Last 60 seconds
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // If recent comparison exists, return it without calling FastAPI again
+    if (recentComparison) {
+      return {
+        leadId: recentComparison.leadId,
+        ruleScore: recentComparison.ruleScore,
+        mlScore: recentComparison.mlScore,
+        rfScore: recentComparison.rfScore ?? 0,
+        delta: recentComparison.delta,
+        agreement: recentComparison.agreement,
+        ruleCategory: recentComparison.ruleCategory,
+        mlCategory: recentComparison.mlCategory,
+        rfCategory: recentComparison.rfCategory ?? 'COLD',
+        ruleLatencyMs: recentComparison.ruleLatencyMs,
+        mlLatencyMs: recentComparison.mlLatencyMs,
+        rfLatencyMs: recentComparison.rfLatencyMs ?? 0,
+      };
+    }
+
     try {
       // Call the compare endpoint on FastAPI
       const response: AxiosResponse<CompareResponse> = await firstValueFrom(
@@ -333,12 +362,15 @@ export class ScoringService {
           leadId,
           ruleScore: Math.round(response.data.ruleScore),
           mlScore: response.data.mlScore,
+          rfScore: response.data.rfScore,
           delta: response.data.delta,
           ruleCategory: response.data.ruleCategory as ScoreCategory,
           mlCategory: response.data.mlCategory as ScoreCategory,
+          rfCategory: response.data.rfCategory as ScoreCategory,
           agreement: response.data.agreement,
           ruleLatencyMs: response.data.ruleLatencyMs,
           mlLatencyMs: response.data.mlLatencyMs,
+          rfLatencyMs: response.data.rfLatencyMs,
         },
       });
 

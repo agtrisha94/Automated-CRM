@@ -5,48 +5,80 @@
 import type { Lead } from '@/types/Leads.types'
 import { INTERACTION_TYPE_LABELS } from '@/constants/enums'
 import { formatDistanceToNow } from 'date-fns'
+import { useEffect, useState } from 'react'
+import { getInteractionsForLead } from '@/api/services/leads.service'
 
 interface InteractionTimelineProps {
   lead: Lead | null
 }
 
-// Mock interaction data for demo (in Phase 4, this comes from API)
+// Interaction data type
 interface Interaction {
   id: string
   type: 'EMAIL' | 'CALL' | 'MEETING' | 'DEMO'
-  notes: string
+  notes?: string
   duration?: number
-  createdAt: string
+  timestamp: string
 }
 
-const mockInteractions: Record<string, Interaction[]> = {
-  // Each lead can have interactions
-  default: [
+export function InteractionTimeline({ lead }: InteractionTimelineProps) {
+  const [interactions, setInteractions] = useState<Interaction[]>([])
+  const [loading, setLoading] = useState(false)
+
+  // Mock interactions for demo when API returns empty
+  const mockInteractions: Interaction[] = [
     {
       id: '1',
       type: 'EMAIL',
       notes: 'Sent product overview',
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     },
     {
       id: '2',
       type: 'CALL',
       notes: 'Initial discovery call - very interested',
-      duration: 30,
-      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
     },
     {
       id: '3',
       type: 'MEETING',
       notes: 'Demo scheduled for next week',
-      duration: 60,
-      createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+      timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
     },
-  ],
-}
+  ]
 
-export function InteractionTimeline({ lead }: InteractionTimelineProps) {
-  const interactions = lead ? mockInteractions[lead.id] || mockInteractions.default : []
+  // Fetch interactions whenever lead changes
+  useEffect(() => {
+    if (!lead?.id) {
+      setInteractions([])
+      return
+    }
+
+    const fetchInteractions = async () => {
+      setLoading(true)
+      try {
+        const data = await getInteractionsForLead(lead.id)
+        // If no interactions from API, use mock data for demo
+        setInteractions(data && data.length > 0 ? data : mockInteractions)
+      } catch (error) {
+        console.error('Failed to fetch interactions:', error)
+        // Fall back to mock interactions on error
+        setInteractions(mockInteractions)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchInteractions()
+  }, [lead?.id])
+
+  if (loading) {
+    return (
+      <div className="p-4 text-center text-slate-500 text-sm">
+        Loading interactions...
+      </div>
+    )
+  }
 
   if (!interactions || interactions.length === 0) {
     return (
@@ -73,7 +105,7 @@ export function InteractionTimeline({ lead }: InteractionTimelineProps) {
                 {INTERACTION_TYPE_LABELS[interaction.type]}
               </span>
               <span className="text-xs text-slate-500">
-                {formatDistanceToNow(new Date(interaction.createdAt), { addSuffix: true })}
+                {formatDistanceToNow(new Date(interaction.timestamp), { addSuffix: true })}
               </span>
             </div>
             {interaction.notes && <p className="text-sm text-slate-700 mt-1">{interaction.notes}</p>}

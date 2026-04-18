@@ -75,6 +75,14 @@ SCORE_WEIGHTS = {
     "EMAIL":         2,
 }
 
+# Recency decay weights based on days since last interaction
+RECENCY_WEIGHTS = {
+    "very_fresh":   (7,  20),     # <= 7 days: +20 points
+    "recent":       (30, 15),     # 8-30 days: +15 points
+    "somewhat":     (90, 10),     # 31-90 days: +10 points
+    "stale":        (999, 5),     # > 90 days: +5 points
+}
+
 
 def compute_deterministic_score(lead: dict) -> float:
     """
@@ -96,6 +104,10 @@ def compute_deterministic_score(lead: dict) -> float:
 
     for itype, count in lead.get("_interaction_counts", {}).items():
         score += SCORE_WEIGHTS.get(itype, 0) * count
+
+    # ✅ NEW: Add recency bonus if interactions exist
+    recency_bonus = lead.get("_recency_bonus", 0)
+    score += recency_bonus
 
     # Clamp to [0, 100]
     return min(100.0, max(0.0, score))
@@ -319,21 +331,75 @@ def seed_to_neon(dataset: dict, database_url: str) -> None:
     cur  = conn.cursor()
 
     try:
-        leads_inserted        = 0
-        interactions_inserted = 0
-
+        # Batch insert leads
+        leads_batch = []
         for lead in dataset["leads"]:
             row = dict(lead)
             row["metadata"] = _json.dumps(row["metadata"]) if row["metadata"] else None
-            cur.execute(SEED_SQL_LEAD, row)
-            leads_inserted += cur.rowcount
+            leads_batch.append(row)
 
-        for interaction in dataset["interactions"]:
-            cur.execute(SEED_SQL_INTERACTION, interaction)
-            interactions_inserted += cur.rowcount
+        # Use batch insert for leads
+        leads_data = [
+            (
+                lead["id"], lead["name"], lead["email"], lead["phone"],
+                lead["company"], lead["jobTitle"], lead["companySize"],
+                lead["industry"], lead["source"], lead["status"],
+                lead["emailOpens"], lead["websiteVisits"], lead["formFills"],
+                lead["ruleScore"], lead["mlScore"], lead["activeScore"],
+                lead["scoreCategory"], lead["actuallyConverted"],
+                lead["metadata"], lead["createdAt"], lead["updatedAt"]
+            )
+            for lead in leads_batch
+        ]
+
+        cur.executemany(
+            """INSERT INTO "Lead" (
+                id, name, email, phone, company, "jobTitle",
+                "companySize", industry, source, status,
+                "emailOpens", "websiteVisits", "formFills",
+                "ruleScore", "mlScore", "activeScore", "scoreCategory",
+                "actuallyConverted", metadata, "createdAt", "updatedAt"
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (email) DO NOTHING""",
+            leads_data
+        )
+        leads_inserted = cur.rowcount
+        print(f"  ✓ Seeded {leads_inserted} leads")
+
+        # Get list of successfully inserted lead IDs by querying the DB
+        cur.execute('SELECT id FROM "Lead" WHERE id = ANY(%s)', (
+            [lead["id"] for lead in leads_batch],
+        ))
+        successfully_inserted_lead_ids = set(row[0] for row in cur.fetchall())
+
+        # Batch insert interactions for successfully inserted leads
+        interactions_batch = [
+            interaction for interaction in dataset["interactions"]
+            if interaction["leadId"] in successfully_inserted_lead_ids
+        ]
+
+        if interactions_batch:
+            interactions_data = [
+                (
+                    interaction["id"], interaction["leadId"],
+                    interaction["type"], interaction["notes"],
+                    interaction["timestamp"]
+                )
+                for interaction in interactions_batch
+            ]
+
+            cur.executemany(
+                """INSERT INTO "Interaction" (id, "leadId", type, notes, timestamp)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO NOTHING""",
+                interactions_data
+            )
+            interactions_inserted = cur.rowcount
+            print(f"  ✓ Seeded {interactions_inserted} interactions")
+        else:
+            print(f"  ℹ  No interactions to seed")
 
         conn.commit()
-        print(f"  ✓ Seeded {leads_inserted} leads, {interactions_inserted} interactions")
 
     except Exception as exc:
         conn.rollback()

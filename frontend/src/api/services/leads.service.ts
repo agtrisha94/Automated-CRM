@@ -183,3 +183,35 @@ export async function addInteraction(id: string, interaction: InteractionInput):
   const { data } = await nestjsClient.post<Lead>(`/leads/${id}/interactions`, interaction)
   return data
 }
+
+/**
+ * Get all interactions for a specific lead
+ */
+export async function getInteractionsForLead(leadId: string) {
+  if (config.USE_MOCKS) {
+    // Mock: Return mock interactions for this lead
+    return [
+      {
+        id: '1',
+        type: 'EMAIL',
+        notes: 'Sent product overview',
+        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: '2',
+        type: 'CALL',
+        notes: 'Initial discovery call - very interested',
+        timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: '3',
+        type: 'MEETING',
+        notes: 'Demo scheduled for next week',
+        timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+      },
+    ]
+  }
+
+  const { data } = await nestjsClient.get(`/leads/${leadId}/interactions`)
+  return data
+}
