@@ -6,6 +6,7 @@ import { ScoreBadge, Card } from '@/components/ui'
 import { SCORE_CATEGORY_TAILWIND } from '@/constants/colors'
 import { AgreementBadge } from './AgreementBadge'
 import { LatencyBadge } from './LatencyBadge'
+import { TimeRelevanceBadge } from '@/components/TimeRelevanceBadge'
 import type { CompareResult } from '@/types/Scoring.types'
 
 interface ScoreComparisonPanelProps {
@@ -69,6 +70,11 @@ export function ScoreComparisonPanel({ compareResult, isLoading = false, error }
 
       {/* Latency Details */}
       <LatencyBadge ruleMs={ruleLatencyMs} lrMs={mlLatencyMs} rfMs={rfLatencyMs} />
+
+      {/* Time Relevance Features */}
+      {compareResult?.timeRelevance && (
+        <TimeRelevanceBadge timeRelevance={compareResult.timeRelevance} />
+      )}
     </div>
   )
 }

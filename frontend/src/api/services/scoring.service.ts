@@ -20,6 +20,10 @@ export async function compareScores(leadId: string): Promise<CompareResult> {
   const mlScore = lead.mlScore ?? Math.floor(Math.random() * 100)
   const rfScore = lead.activeScore ?? Math.floor(Math.random() * 100)
   
+  const ruleCategory = ruleScore >= 70 ? ('HOT' as const) : ruleScore >= 40 ? ('WARM' as const) : ('COLD' as const)
+  const mlCategory = mlScore >= 70 ? ('HOT' as const) : mlScore >= 40 ? ('WARM' as const) : ('COLD' as const)
+  const rfCategory = rfScore >= 70 ? ('HOT' as const) : rfScore >= 40 ? ('WARM' as const) : ('COLD' as const)
+
   return {
     leadId,
     ruleScore,
@@ -28,10 +32,10 @@ export async function compareScores(leadId: string): Promise<CompareResult> {
     ruleLatencyMs: Math.floor(Math.random() * 10) + 3,
     mlLatencyMs: Math.floor(Math.random() * 30) + 30,
     rfLatencyMs: Math.floor(Math.random() * 40) + 60,
-    ruleCategory: ruleScore >= 70 ? ('HOT' as const) : ruleScore >= 40 ? ('WARM' as const) : ('COLD' as const),
-    mlCategory: mlScore >= 70 ? ('HOT' as const) : mlScore >= 40 ? ('WARM' as const) : ('COLD' as const),
-    rfCategory: rfScore >= 70 ? ('HOT' as const) : rfScore >= 40 ? ('WARM' as const) : ('COLD' as const),
-    agreement: ruleScore === mlScore,
+    ruleCategory,
+    mlCategory,
+    rfCategory,
+    agreement: ruleCategory === mlCategory && mlCategory === rfCategory,
     delta: rfScore - ruleScore,
     history: [],
     featureImportances: [

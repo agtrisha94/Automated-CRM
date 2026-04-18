@@ -98,17 +98,19 @@ class ModelTrainer:
         """
         Prepare features for model training.
         
-        FEATURES:
+        FEATURES (Week 5 - WITH TIME RELEVANCE):
         - emailOpens (numeric)
         - websiteVisits (numeric)
         - formFills (numeric)
         - companySize (categorical → encoded)
         - industry (categorical → encoded)
+        - recencyScore (time-based, 0-100) NEW
+        - engagementVelocity (time-based, 0-10) NEW
         
         TARGET:
         - actuallyConverted (binary)
         """
-        print("🔧 Preparing features...")
+        print("🔧 Preparing features (including time relevance)...")
         
         # Handle missing categorical values
         self.df['companySize'] = self.df['companySize'].fillna('UNKNOWN')
@@ -122,13 +124,81 @@ class ModelTrainer:
             self.df['industry']
         )
         
-        # Select features
+        # Calculate time-based features (NEW - Week 5)
+        from datetime import datetime, timezone
+        
+        def calculate_recency_score(days_since):
+            """Calculate exponential recency score (0-100)"""
+            if pd.isna(days_since) or days_since < 0:
+                return 0.0
+            decay_rate = 7.0
+            recency = 100.0 * np.exp(-days_since / decay_rate)
+            return float(recency)
+        
+        def calculate_engagement_velocity(total_engagements, days_since_created):
+            """Calculate engagement events per day (0-10)"""
+            if pd.isna(days_since_created) or days_since_created <= 0:
+                return 0.0
+            velocity = total_engagements / days_since_created
+            return min(velocity, 10.0)
+        
+        def calculate_days_since(timestamp_str):
+            """Calculate days since timestamp"""
+            if pd.isna(timestamp_str) or not timestamp_str:
+                return None
+            try:
+                if isinstance(timestamp_str, str):
+                    if timestamp_str.endswith('Z'):
+                        timestamp_str = timestamp_str[:-1] + '+00:00'
+                    dt = datetime.fromisoformat(timestamp_str)
+                else:
+                    dt = timestamp_str
+                
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                else:
+                    dt = dt.astimezone(timezone.utc)
+                
+                now = datetime.now(timezone.utc)
+                delta = now - dt
+                days = delta.total_seconds() / (24 * 3600)
+                return max(0.0, days)
+            except Exception as e:
+                print(f"⚠️  Warning: Could not parse timestamp: {e}")
+                return None
+        
+        # Calculate time features
+        self.df['days_since_created'] = self.df['createdAt'].apply(calculate_days_since)
+        # Use lastActivityAt if available, otherwise use createdAt
+        if 'lastActivityAt' in self.df.columns:
+            self.df['days_since_activity'] = self.df['lastActivityAt'].apply(calculate_days_since)
+        else:
+            self.df['days_since_activity'] = self.df['createdAt'].apply(calculate_days_since)
+        
+        # Recency score based on last activity
+        self.df['recencyScore'] = self.df['days_since_activity'].apply(calculate_recency_score)
+        
+        # Engagement velocity
+        total_engagements = self.df['emailOpens'] + self.df['websiteVisits'] + self.df['formFills']
+        self.df['engagementVelocity'] = total_engagements.combine(
+            self.df['days_since_created'],
+            calculate_engagement_velocity,
+            fill_value=0
+        )
+        
+        # Handle NaN values in time features
+        self.df['recencyScore'] = self.df['recencyScore'].fillna(0.0)
+        self.df['engagementVelocity'] = self.df['engagementVelocity'].fillna(0.0)
+        
+        # Select features (now includes time features)
         feature_columns = [
             'emailOpens',
             'websiteVisits',
             'formFills',
             'companySize_encoded',
-            'industry_encoded'
+            'industry_encoded',
+            'recencyScore',           # NEW
+            'engagementVelocity'      # NEW
         ]
         
         X = self.df[feature_columns].values
@@ -139,10 +209,11 @@ class ModelTrainer:
             X, y, test_size=0.2, random_state=42, stratify=y
         )
         
-        print(f"✅ Features prepared")
+        print(f"✅ Features prepared (with time relevance)")
         print(f"   Training samples: {len(self.X_train)}")
         print(f"   Test samples: {len(self.X_test)}")
         print(f"   Features: {len(feature_columns)}")
+        print(f"   Feature names: {feature_columns}")
         print()
         
         return self
@@ -262,10 +333,14 @@ class ModelTrainer:
                 'websiteVisits',
                 'formFills',
                 'companySize_encoded',
-                'industry_encoded'
+                'industry_encoded',
+                'recencyScore',
+                'engagementVelocity'
             ],
             'companySize_classes': self.company_size_encoder.classes_.tolist(),
             'industry_classes': self.industry_encoder.classes_.tolist(),
+            'time_relevance_features': ['recencyScore', 'engagementVelocity'],
+            'total_features': 7,
         }
         metadata_path = self.models_dir / "metadata.json"
         with open(metadata_path, 'w') as f:

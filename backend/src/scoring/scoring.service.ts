@@ -66,6 +66,13 @@ interface CompareResponse {
   ruleLatencyMs: number;
   mlLatencyMs: number;
   rfLatencyMs: number;
+  timeRelevance?: {     // NEW: Time-based features
+    daysSinceCreated?: number;
+    daysSinceActivity?: number;
+    recencyScore: number;
+    engagementVelocity: number;
+    activityFreshness: string;
+  };
 }
 
 /**
@@ -91,6 +98,13 @@ export interface CompareResult {
   ruleLatencyMs: number;
   mlLatencyMs: number;
   rfLatencyMs: number;
+  timeRelevance?: {     // NEW: Time-based features
+    daysSinceCreated?: number;
+    daysSinceActivity?: number;
+    recencyScore: number;
+    engagementVelocity: number;
+    activityFreshness: string;
+  };
 }
 
 @Injectable()
@@ -352,11 +366,14 @@ export class ScoringService {
             industry: lead.industry,
             status: lead.status,
             source: lead.source,
+            createdAt: lead.createdAt?.toISOString(),
+            lastActivityAt: lead.updatedAt.toISOString(),  // Use updatedAt as proxy for last activity
           },
         ),
       );
 
       // Save comparison to database for later analysis
+      // NOTE: Time relevance fields will be added after database migration
       await this.prisma.scoringComparison.create({
         data: {
           leadId,
@@ -374,7 +391,7 @@ export class ScoringService {
         },
       });
 
-      // Return the full comparison result
+      // Return the full comparison result with time relevance
       return {
         leadId: response.data.leadId,
         ruleScore: response.data.ruleScore,
@@ -388,6 +405,7 @@ export class ScoringService {
         ruleLatencyMs: response.data.ruleLatencyMs,
         mlLatencyMs: response.data.mlLatencyMs,
         rfLatencyMs: response.data.rfLatencyMs,
+        timeRelevance: response.data.timeRelevance, // NEW: Include time features
       };
     } catch (error) {
       this.logger.error(`Score comparison failed for lead ${leadId}`, error);

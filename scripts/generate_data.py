@@ -179,6 +179,16 @@ def make_lead(sigma: float) -> tuple[dict, list[dict]]:
 
     interactions, interaction_counts = generate_interactions(lead_id, status)
 
+    # Calculate lastActivityAt from most recent interaction
+    if interactions:
+        last_interaction_ts = max(
+            datetime.fromisoformat(i["timestamp"]) for i in interactions
+        )
+        last_activity_at = last_interaction_ts.isoformat()
+    else:
+        # If no interactions, set to created_at as fallback
+        last_activity_at = None  # Will be set after created_at is generated
+
     # Partial lead dict for scoring (no DB fields yet)
     proto = {
         "emailOpens":         email_opens,
@@ -214,6 +224,10 @@ def make_lead(sigma: float) -> tuple[dict, list[dict]]:
         datetime.fromisoformat(created_at) + timedelta(days=random.randint(0, 10))
     ).isoformat()
 
+    # Set lastActivityAt: use most recent interaction or fallback to updated_at
+    if last_activity_at is None:
+        last_activity_at = updated_at
+
     lead = {
         "id":           lead_id,
         "name":         fake.name(),
@@ -236,6 +250,7 @@ def make_lead(sigma: float) -> tuple[dict, list[dict]]:
         "metadata":     None,
         "createdAt":    created_at,
         "updatedAt":    updated_at,
+        "lastActivityAt": last_activity_at,
     }
 
     return lead, interactions
@@ -291,13 +306,13 @@ INSERT INTO "Lead" (
     "companySize", industry, source, status,
     "emailOpens", "websiteVisits", "formFills",
     "ruleScore", "mlScore", "activeScore", "scoreCategory",
-    "actuallyConverted", metadata, "createdAt", "updatedAt"
+    "actuallyConverted", metadata, "createdAt", "updatedAt", "lastActivityAt"
 ) VALUES (
     %(id)s, %(name)s, %(email)s, %(phone)s, %(company)s, %(jobTitle)s,
     %(companySize)s, %(industry)s, %(source)s, %(status)s,
     %(emailOpens)s, %(websiteVisits)s, %(formFills)s,
     %(ruleScore)s, %(mlScore)s, %(activeScore)s, %(scoreCategory)s,
-    %(actuallyConverted)s, %(metadata)s, %(createdAt)s, %(updatedAt)s
+    %(actuallyConverted)s, %(metadata)s, %(createdAt)s, %(updatedAt)s, %(lastActivityAt)s
 ) ON CONFLICT (email) DO NOTHING;
 """
 
@@ -347,7 +362,7 @@ def seed_to_neon(dataset: dict, database_url: str) -> None:
                 lead["emailOpens"], lead["websiteVisits"], lead["formFills"],
                 lead["ruleScore"], lead["mlScore"], lead["activeScore"],
                 lead["scoreCategory"], lead["actuallyConverted"],
-                lead["metadata"], lead["createdAt"], lead["updatedAt"]
+                lead["metadata"], lead["createdAt"], lead["updatedAt"], lead["lastActivityAt"]
             )
             for lead in leads_batch
         ]
@@ -358,8 +373,8 @@ def seed_to_neon(dataset: dict, database_url: str) -> None:
                 "companySize", industry, source, status,
                 "emailOpens", "websiteVisits", "formFills",
                 "ruleScore", "mlScore", "activeScore", "scoreCategory",
-                "actuallyConverted", metadata, "createdAt", "updatedAt"
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                "actuallyConverted", metadata, "createdAt", "updatedAt", "lastActivityAt"
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (email) DO NOTHING""",
             leads_data
         )

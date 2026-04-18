@@ -6,7 +6,9 @@
     "websiteVisits",
     "formFills",
     "companySize_encoded",
-    "industry_encoded"
+    "industry_encoded",
+    "recencyScore",
+    "engagementVelocity"
   ],
   "companySize_classes": [
     "ENTERPRISE",
@@ -20,5 +22,10 @@
     "OTHER",
     "RETAIL",
     "TECH"
-  ]
+  ],
+  "time_relevance_features": [
+    "recencyScore",
+    "engagementVelocity"
+  ],
+  "total_features": 7
 }

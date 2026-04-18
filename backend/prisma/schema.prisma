@@ -30,6 +30,12 @@ model Lead {
 
   actuallyConverted Boolean?
 
+  // Time Relevance Fields (Week 5)
+  lastActivityAt DateTime?  // When the lead last engaged with content
+  recencyScore   Float?     // Exponential decay score (0-100)
+  engagementVelocity Float? // Events per day (0-10)
+  activityFreshness String?  // active | warm | stale | unknown
+
   metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -42,6 +48,7 @@ model Lead {
   @@index([status, scoreCategory])
   @@index([createdAt])
   @@index([ruleScore, mlScore])
+  @@index([lastActivityAt])
 }
 
 model ScoringRule {
@@ -83,6 +90,14 @@ model ScoringComparison {
   ruleLatencyMs Int
   mlLatencyMs   Int
   rfLatencyMs   Int?
+  
+  // Time Relevance Data (Week 5)
+  daysSinceCreated Float?
+  daysSinceActivity Float?
+  recencyScore Float?
+  engagementVelocity Float?
+  activityFreshness String?
+  
   createdAt     DateTime      @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id])

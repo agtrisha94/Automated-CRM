@@ -8,6 +8,7 @@ import { selectCompareResult, selectIsComparing, selectScoringError } from '@/st
 import { runScoreCompare } from '@/store/slices/scoringSlice'
 import { Button, Card, ScoreBadge } from '@/components/ui'
 import { ScoreComparisonPanel } from '@/components/scoring'
+import { TimeRelevanceBadge } from '@/components/TimeRelevanceBadge'
 import { InteractionForm } from './InteractionForm'
 import { InteractionTimeline } from './InteractionTimeline'
 import { LEAD_STATUS_LABELS, LEAD_SOURCE_LABELS } from '@/constants/enums'
@@ -124,6 +125,13 @@ export function LeadDetail({ lead, isOpen, onClose }: LeadDetailProps) {
               <div>
                 <ScoreComparisonPanel compareResult={compareResult} isLoading={isComparing} error={scoringError} />
               </div>
+
+              {/* Time Relevance Metrics */}
+              {compareResult?.timeRelevance && (
+                <div>
+                  <TimeRelevanceBadge timeRelevance={compareResult.timeRelevance} />
+                </div>
+              )}
             </div>
           )}
 

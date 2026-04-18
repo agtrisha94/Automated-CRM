@@ -14,6 +14,15 @@ export const ScoreCategory = {
 
 export type ScoreCategory = typeof ScoreCategory[keyof typeof ScoreCategory];
 
+export const ActivityFreshness = {
+  ACTIVE: 'active',
+  WARM: 'warm',
+  STALE: 'stale',
+  UNKNOWN: 'unknown',
+} as const;
+
+export type ActivityFreshness = typeof ActivityFreshness[keyof typeof ActivityFreshness];
+
 export interface ScoreHistoryEntry {
   id: string;
   leadId: string;
@@ -33,13 +42,25 @@ export type FeatureKey =
   | 'isDirector'
   | 'isEnterprise'
   | 'isSME'
-  | 'isTechFinance';
+  | 'isTechFinance'
+  | 'recencyScore'
+  | 'engagementVelocity'
+  | 'daysSinceCreated'
+  | 'daysSinceActivity';
 
 export interface FeatureImportance {
   featureKey: FeatureKey;
   lrWeight: number;
   rfImportance: number;
   humanLabel: string;
+}
+
+export interface TimeRelevance {
+  daysSinceCreated?: number;
+  daysSinceActivity?: number;
+  recencyScore: number;
+  engagementVelocity: number;
+  activityFreshness: ActivityFreshness;
 }
 
 export interface ScoringResult {
@@ -62,4 +83,5 @@ export interface ScoringResult {
 
 export interface CompareResult extends ScoringResult {
   featureImportances?: FeatureImportance[];
+  timeRelevance?: TimeRelevance;
 }

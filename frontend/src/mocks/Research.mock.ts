@@ -54,36 +54,36 @@ export const mockConfusionMatrices: ConfusionMatricesData = {
 // ── Feature Importances (top features per model) ────
 export const mockFeatureImportances: FeatureImportances = {
   rules: [
-    { name: 'emailOpens', importance: 0.25 },
-    { name: 'websiteVisits', importance: 0.20 },
-    { name: 'formFills', importance: 0.18 },
-    { name: 'companySize', importance: 0.15 },
-    { name: 'industry', importance: 0.12 },
-    { name: 'callsAttended', importance: 0.05 },
-    { name: 'meetingsAttended', importance: 0.03 },
-    { name: 'demosAttended', importance: 0.02 },
-    { name: 'daysSinceFirstInteraction', importance: 0.00 },
+    { name: 'emailOpens', importance: 0.22 },
+    { name: 'websiteVisits', importance: 0.18 },
+    { name: 'formFills', importance: 0.16 },
+    { name: 'recencyScore', importance: 0.14 },       // NEW: Time relevance
+    { name: 'engagementVelocity', importance: 0.10 }, // NEW: Time relevance
+    { name: 'companySize', importance: 0.12 },
+    { name: 'industry', importance: 0.05 },
+    { name: 'daysSinceCreated', importance: 0.02 },   // NEW: Time relevance
+    { name: 'callsAttended', importance: 0.01 },
   ],
   lr: [
-    { name: 'emailOpens', importance: 0.28 },
-    { name: 'websiteVisits', importance: 0.22 },
-    { name: 'meetingsAttended', importance: 0.15 },
-    { name: 'formFills', importance: 0.13 },
-    { name: 'callsAttended', importance: 0.10 },
-    { name: 'companySize', importance: 0.07 },
-    { name: 'industry', importance: 0.03 },
-    { name: 'demosAttended', importance: 0.02 },
-    { name: 'daysSinceFirstInteraction', importance: 0.00 },
-  ],
-  rf: [
-    { name: 'emailOpens', importance: 0.30 },
-    { name: 'websiteVisits', importance: 0.24 },
-    { name: 'meetingsAttended', importance: 0.18 },
-    { name: 'callsAttended', importance: 0.12 },
+    { name: 'emailOpens', importance: 0.25 },
+    { name: 'websiteVisits', importance: 0.20 },
+    { name: 'recencyScore', importance: 0.16 },       // NEW: Time relevance
+    { name: 'meetingsAttended', importance: 0.13 },
+    { name: 'engagementVelocity', importance: 0.10 }, // NEW: Time relevance
     { name: 'formFills', importance: 0.08 },
     { name: 'companySize', importance: 0.05 },
-    { name: 'demosAttended', importance: 0.02 },
+    { name: 'daysSinceCreated', importance: 0.02 },   // NEW: Time relevance
     { name: 'industry', importance: 0.01 },
-    { name: 'daysSinceFirstInteraction', importance: 0.00 },
+  ],
+  rf: [
+    { name: 'emailOpens', importance: 0.27 },
+    { name: 'websiteVisits', importance: 0.22 },
+    { name: 'recencyScore', importance: 0.18 },       // NEW: Time relevance
+    { name: 'meetingsAttended', importance: 0.15 },
+    { name: 'engagementVelocity', importance: 0.12 }, // NEW: Time relevance
+    { name: 'callsAttended', importance: 0.03 },
+    { name: 'formFills', importance: 0.02 },
+    { name: 'companySize', importance: 0.02 },
+    { name: 'daysSinceCreated', importance: 0.01 },   // NEW: Time relevance
   ],
 }
